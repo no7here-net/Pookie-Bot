@@ -1,0 +1,72 @@
+{
+    "mode": "standard",
+    "auth": {
+        "discord_token": "ENV_DISCORD_TOKEN",
+        "ssh": [
+            {
+                "host": "rouabix.no7here.net",
+                "username": "no7here",
+                "key": "ENV_ROUBAIX_SSH_KEY"
+            }
+        ]
+    },
+    "modules": {
+        "admin": false,
+        "general": false,
+        "invites": false,
+        "minecraft": false,
+        "moderation": false,
+        "stats": false
+    },
+    "minecraft": {
+        "servers": {
+            "velocity": {
+                "game_port": 25565,
+                "rcon_port": 25575,
+                "rcon_password": "ENV_RCON_PASSWORD"
+            },
+            "survival": {
+                "game_port": 30067,
+                "rcon_port": 25576,
+                "rcon_password": "ENV_RCON_PASSWORD"
+            },
+            "creative": {
+                "game_port": 30068,
+                "rcon_port": 25577,
+                "rcon_password": "ENV_RCON_PASSWORD"
+            },
+            "redstone": {
+                "game_port": 30069,
+                "rcon_port": 25578,
+                "rcon_password": "ENV_RCON_PASSWORD"
+            }
+        }
+    },
+    "customisation": {
+        "colours": {
+            "error": "f97676",
+            "warning": "fc9a4a",
+            "success": "34d399",
+            "info": "2fbffd"
+        },
+        "emojis": {
+            "error": "<:error:1519126962247831572>",
+            "warning": "<:warning:1519126964936376380>",
+            "success": "<:success:1519126964005371904>",
+            "info": "<:info:1519126963111985382>"
+        }
+    },
+    "servers": [{
+        "guild": 1366470324241039481,
+        "roles": {
+            "verified": 1366576393596702761
+        },
+        "channels": {
+            "mc_status": 1366579339742941355,
+            "mc_chat": 1517644886185087167,
+            "mc_logs": 1517648763580190900,
+            "logs": 1456757892538437915
+        }
+    }],
+    "admins": [956335508311654400, 657255541193572352, 1154535018031489075]
+}
