@@ -5,6 +5,11 @@
 # I = info
 # O = output (actual error output)
 
+import datetime
+
+# Log script start time for log file name
+_START_TIME = datetime.datetime.now().strftime("%Y-%m-%d_-_%H-%M-%S")
+
 class Logger:
     # ANSI Escape Codes for formatting
     _RED = "\033[31m"
@@ -18,7 +23,7 @@ class Logger:
     def _write_to_log(cls, label: str, message: str):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        with open("..output.log", "a", encoding="utf-8") as f:
+        with open(f"..logs/{_START_TIME}.log", "a", encoding="utf-8") as f:
             f.write(f"[ {timestamp} ] [ {label} ] {message}\n")
 
     @classmethod
