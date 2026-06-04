@@ -1,5 +1,4 @@
 {
-    "mode": "standard",
     "auth": {
         "discord_token": "ENV_DISCORD_TOKEN",
         "ssh": [
