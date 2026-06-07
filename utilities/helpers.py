@@ -20,15 +20,19 @@ def get_emoji(name: str) -> str:
 
 # Fetch HEX colours and convert to integers for discord.py
 def get_colour(name: str) -> int:
-    return int(config.get("customisation", {}).get("colours", {}).get(name, "#2fbffd"), 16)
+    return int(config.get("customisation", {}).get("colours", {}).get(name, "2fbffd"), 16)
 
 # Internal ping helper function
 async def _ping_host(host: str, port: int) -> bool:
     try:
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3)
-        writer.close()
-        await writer.wait_closed()
-        return True
+        # Creates a background process: ping -c 1 <host>
+        process = await asyncio.create_subprocess_exec(
+            "ping", "-c", "4", host,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        await process.wait()
+        return process.returncode == 0
     except Exception:
         return False
 
