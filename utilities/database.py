@@ -144,3 +144,18 @@ async def init_db():
             """)
 
     Logger.info("Database tables verified.")
+
+async def execute(query: str, *args):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(query, args)
+        await db.commit()
+
+async def fetchone(query: str, *args):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(query, args) as cursor:
+            return await cursor.fetchone()
+
+async def fetchall(query: str, *args):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(query, args) as cursor:
+            return await cursor.fetchall()
