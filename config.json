@@ -1,6 +1,11 @@
 {
     "auth": {
         "discord_token": "ENV_DISCORD_TOKEN",
+        "database": {
+            "host": "localhost",
+            "username": "pookie_bot",
+            "password": "ENV_DB_PASSWORD"
+        },
         "ssh": [
             {
                 "host": "rouabix.no7here.net",
@@ -20,21 +25,25 @@
     "minecraft": {
         "servers": {
             "velocity": {
+                "address": "roubaix.no7here.net",
                 "game_port": 25565,
                 "rcon_port": 25575,
                 "rcon_password": "ENV_RCON_PASSWORD"
             },
             "survival": {
+                "address": "roubaix.no7here.net",
                 "game_port": 30067,
                 "rcon_port": 25576,
                 "rcon_password": "ENV_RCON_PASSWORD"
             },
             "creative": {
+                "address": "roubaix.no7here.net",
                 "game_port": 30068,
                 "rcon_port": 25577,
                 "rcon_password": "ENV_RCON_PASSWORD"
             },
             "redstone": {
+                "address": "roubaix.no7here.net",
                 "game_port": 30069,
                 "rcon_port": 25578,
                 "rcon_password": "ENV_RCON_PASSWORD"
