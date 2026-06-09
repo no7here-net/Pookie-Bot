@@ -14,10 +14,11 @@
 - [ ] General
     - [ ] Ping
     - [ ] Status
-        - [ ] Internet Access
-        - [ ] London Server
-        - [ ] Roubaix Server
-        - [ ] Minecraft Server
+        - [x] Internet Access
+        - [x] London Server
+        - [x] Roubaix Server
+        - [x] Minecraft Server
+        - [ ] Cloudflare Services
 - [ ] Invites
 - [ ] Minecraft
     - [ ] Whitelist
