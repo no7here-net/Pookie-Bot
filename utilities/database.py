@@ -1,5 +1,11 @@
+# Database handling script
+# Checks / creates database
+# Creates tables (if missing)
+# Handles access requests from other parts of the bot
+
 import os
 import aiomysql
+
 from utilities.output import Logger
 from utilities.helpers import config
 

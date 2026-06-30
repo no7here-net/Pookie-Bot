@@ -1,4 +1,8 @@
+# Where the 4 types of embeds are defined
+# Uses emojis and colours fetched by helpers.py
+
 import discord
+
 from utilities.helpers import get_emoji, get_colour
 
 class Embeds:
