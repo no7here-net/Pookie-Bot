@@ -93,6 +93,37 @@ async def check_rcon() -> dict:
     # Return a KV dictionary
     return dict(zip(server_names, results))
 
+# ==================
+# PERMISSION CHECKER
+# ==================
+
+def is_verified(interaction: discord.Interaction) -> bool:
+    # Bot admin bypass
+    if interaction.user.id in config.get("admins", []):
+        return True
+
+    # Block DMs (prevents crashes on next part)
+    if not interaction.guild:
+        return False
+
+    # Match server in config
+    server_config = None
+    for server in config.get("servers", []):
+        if server.get("guild") == interaction.guild.id:
+            server_config = server
+            break
+
+    # Find verified role in server
+    verified_role = server_config.get("roles", {}).get("verified")
+
+    # Check user has the role
+    for role in interaction.user.roles:
+        if role.id == verified_role_id:
+            return True
+
+    # If any cheks fail, block
+    return False
+
 # ================
 # INTERNAL HELPERS
 # ================
