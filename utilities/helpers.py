@@ -5,7 +5,6 @@
 # - Status checkers
 #   - Cloudflare & Google DNS checks for internet connectivity... I get the irony of it being a Discord bot ok
 #   - SSH access check
-#   - Minecraft check
 
 import asyncio
 import json
