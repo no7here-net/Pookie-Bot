@@ -94,8 +94,7 @@ async def init_db():
                     discord_id BIGINT,
                     moderator_id BIGINT NOT NULL,
                     reason TEXT,
-                    banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (mc_uuid) REFERENCES mc_accounts(mc_uuid) ON DELETE CASCADE
+                    banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
 
