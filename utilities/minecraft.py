@@ -1,3 +1,6 @@
+# Minecraft functions
+# Handles RCON check, whitelist, blacklist (when done) and RCON commands
+
 import asyncio
 import aiohttp
 import os
@@ -38,7 +41,7 @@ async def check_rcon() -> dict:
     return dict(zip(server_names, results))
 
 # Fetches and links Minecraft & Discord account together
-async def mc_info(discord_id: str, mc_name: str) -> dict:
+async def whitelist_logic(discord_id: str, mc_name: str) -> dict:
     # Fetch unique (and unchangeable) ID for the MC account
     uuid = await _fetch_mc_uuid(mc_name)
 
@@ -56,6 +59,7 @@ async def mc_info(discord_id: str, mc_name: str) -> dict:
             await cur.execute("SELECT MC_uuid FROM mc_accounts WHERE discord_id = %s", (discord_id,))
 
             if await cur.fetchone():
+                Logger.warning(f"Discord account already linked to a Minecraft account")
                 return {
                     "success": False,
                     "error": "Your Discord account is already linked to a Minecraft account."
@@ -65,6 +69,7 @@ async def mc_info(discord_id: str, mc_name: str) -> dict:
             await cur.execute("SELECT discord_id FROM mc_accounts WHERE mc_uuid = %s", (uuid,))
 
             if await cur.fetchone():
+                Logger.warning(f"Minecraft account already linked to another Discord account.")
                 return {
                     "success": False,
                     "error": "This Minecraft account is already linked to another Discord account."
@@ -76,6 +81,7 @@ async def mc_info(discord_id: str, mc_name: str) -> dict:
             ban = await cur.fetchone()
 
             if ban:
+                Logger.warning(f"This Minecraft account is banned.")
                 return {
                     "success": False,
                     "error": "This Minecraft account is banned."
@@ -85,6 +91,7 @@ async def mc_info(discord_id: str, mc_name: str) -> dict:
             response = await _send_velocity_command(f"whitelist add {mc_name}")
 
             if "ERROR" in response:
+                Logger.error(f"Failed to execute whitelist command. Check log.", str(response.strip("ERROR: ")))
                 return {
                     "success": False,
                     "error": f"Failed to execute whitelist command."
@@ -112,8 +119,13 @@ async def _fetch_mc_uuid(name: str) -> str:
         try:
             async with session.head("https://api.mojang.com/users/profiles/minecraft/" + name) as response:
                 if response.status == 200:
-                    return await (response.json().get("id", "failed"))
+                    data = await response.json()
+
+                    Logger.success(f"Found UUID \"{data.get("id", "failed")}\" for \"{name}\".")
+
+                    return data.get("id", "failed")
         except Exception:
+            Logger.warning(f"Failed to fetch UUID for Minecraft username \"{name}\".")
             return "failed"
 
 # Fetches avatar by trying multiple 3rd party services
@@ -130,8 +142,10 @@ async def _fetch_mc_avatar(uuid: str) -> str:
             try:
                 async with session.get(url, timeout=2) as response:
                     if response.status == 200:
+                        Logger.success(f"Fetched avatar for MC UUID \"{uuid}\".")
                         return url
             except Exception:
+                Logger.warning(f"Failed to fetch avatar for MC UUID \"{uuid}\".")
                 continue
 
 # Send a command to Velocity
@@ -141,6 +155,7 @@ async def _send_velocity_command(command: str) -> str:
 
     # If there isn't a velocity entry in the config, return nothing
     if not velocity:
+        Logger.warning(f"Velocity proxy not found in config.json")
         return "ERROR: Velocity server not found in config."
 
     # Fetch password from environment variables
@@ -156,6 +171,7 @@ def _send_rcon(host: str, port: int, password: str, command: str) -> str:
             response = mcr.command(command)
             return response
     except Exception as e:
+        Logger.error(f"Failed to broadcast. Check log.", str(e))
         return "ERROR: " + str(e)
 
 # Internal RCON helper function
@@ -164,4 +180,5 @@ def _sync_check_rcon(host: str, port: int, password: str) -> bool:
         with MCRcon(host, password, port=port) as mcr:
             return True
     except Exception:
+        Logger.warning(f"RCON check failed.")
         return False
