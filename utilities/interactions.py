@@ -5,7 +5,7 @@ import discord
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import get_emoji
+from utilities.helpers import get_emoji, is_admin, config
 from utilities.invites import process_verification, process_ban
 
 class VerificationView(discord.ui.View):
@@ -20,6 +20,15 @@ class VerificationView(discord.ui.View):
         custom_id="persistent_view:verify"
     )
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Grab verified role ID from config and check if the user has a role matching that ID
+        verified_role = next((s for s in config.get("servers", []) if s.get("guild") == interaction.guild.id), None).get("roles", {}).get("verified") if server_config else None
+
+        # Block if they aren't verified or a bot admin
+        if not (any(role.id == verified_role_id for role in interaction.user.roles) or is_admin(interaction.user.id)):
+            embed = Embeds.error("Only verified members can approve new users.")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
@@ -42,19 +51,22 @@ class VerificationView(discord.ui.View):
         custom_id="persistent_view:ban"
     )
     async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Require bot admin / user ban perms to run ban action
+        if not (interaction.user.guild_permissions.ban_members or is_admin(interaction.user.id)):
+            embed = Embeds.error("You do not have permission to perform this action.")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
-
-        # Process ban
-        member = await process_ban(interaction.guild, interaction.message.id)
 
         if member:
             # Overwrite original embed & remove buttons
             reason = f"Gatekeeper ban executed by {interaction.user.global_name} (ID: {interaction.user.id})"
-            success = await process_ban(interaction.guild, interaction.message.id, reason)
+            user = await process_ban(interaction.guild, interaction.message.id, reason)
 
-            if success:
-                embed = Embeds.success(f"<@{member.id}> was banned by <@{interaction.user.id}>.")
+            if user:
+                embed = Embeds.success(f"<@{user}> was banned by <@{interaction.user.id}>.")
                 await interaction.message.edit(embed=embed, view=None)
             else:
                 embed = Embeds.error(f"Failed to ban the user.")
