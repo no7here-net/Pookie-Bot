@@ -1,7 +1,7 @@
 # Database handling script
 # Checks / creates database
 # Creates tables (if missing)
-# Handles access requests from other parts of the bot
+# Creates global variable accessible to other files for cursor acccess
 
 import os
 import aiomysql
@@ -50,9 +50,9 @@ async def init_db():
             db=db_name,
             autocommit=True
         )
-        Logger.success(f"Connected to MariaDB database successfully.")
+        Logger.info("Connected to MariaDB database.")
     except Exception as e:
-        Logger.error(f"Failed to pool connections to database. Check log.", str(e))
+        Logger.error("Failed to pool connections to database. Check log.", str(e))
         return
 
     # Verify database is not missing any tables
