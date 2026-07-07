@@ -35,14 +35,14 @@ class PookieBot(commands.Bot):
             if module_state:
                 try:
                     await self.load_extension(f"modules.{module_name}")
-                    Logger.success(f"Loaded {module_name}")
+                    Logger.success(f"Loaded \"{module_name}\".")
                 except Exception as e:
-                    Logger.error(f"Failed to load {module_name}. Check log.", str(e))
+                    Logger.error(f"Failed to load \"{module_name}\". Check log.", str(e))
 
         # Sync bot commands to Discord
         try:
             synced = await self.tree.sync()
-            Logger.info(f"Synced {len(synced)} commands")
+            Logger.info(f"Synced {len(synced)} commands.")
         except Exception as e:
             Logger.error("Failed to sync commands. Check log.", str(e))
 
@@ -107,7 +107,7 @@ class PookieBot(commands.Bot):
     async def on_ready(self):
         Logger.info(f"Connected to Discord as \"{self.user.name}#{self.user.discriminator}\" (ID: {self.user.id})")
 
-client = PookieBot()
+bot = PookieBot()
 
 if __name__ == "__main__":
-    client.run(os.environ.get(config["auth"]["discord_token"]), log_handler=None)
+    bot.run(os.environ.get(config["auth"]["discord_token"]), log_handler=None)
