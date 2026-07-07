@@ -21,7 +21,7 @@ class VerificationView(discord.ui.View):
     )
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Grab verified role ID from config and check if the user has a role matching that ID
-        verified_role = next((s for s in config.get("servers", []) if s.get("guild") == interaction.guild.id), None).get("roles", {}).get("verified") if server_config else None
+        verified_role_id = next((s for s in config.get("servers", []) if s.get("guild") == interaction.guild.id), {}).get("roles", {}).get("verified")
 
         # Block if they aren't verified or a bot admin
         if not (any(role.id == verified_role_id for role in interaction.user.roles) or is_admin(interaction.user.id)):
@@ -60,14 +60,14 @@ class VerificationView(discord.ui.View):
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
-        if member:
-            # Overwrite original embed & remove buttons
-            reason = f"Gatekeeper ban executed by {interaction.user.global_name} (ID: {interaction.user.id})"
-            user = await process_ban(interaction.guild, interaction.message.id, reason)
+        reason = f"Gatekeeper ban executed by {interaction.user.global_name} (ID: {interaction.user.id})"
 
-            if user:
-                embed = Embeds.success(f"<@{user}> was banned by <@{interaction.user.id}>.")
-                await interaction.message.edit(embed=embed, view=None)
-            else:
-                embed = Embeds.error(f"Failed to ban the user.")
-                await interaction.followup.send(embed=embed)
+        user_id = await process_ban(interaction.guild, interaction.message.id, reason)
+
+        if user_id:
+            # Overwrite original embed & remove buttons
+            embed = Embeds.success(f"<@{user_id}> was banned by <@{interaction.user.id}>.")
+            await interaction.message.edit(embed=embed, view=None)
+        else:
+            embed = Embeds.error(f"Failed to ban the user.")
+            await interaction.followup.send(embed=embed)
