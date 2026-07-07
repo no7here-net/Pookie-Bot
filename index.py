@@ -23,6 +23,9 @@ class PookieBot(commands.Bot):
         # Global permission check
         self.tree.interaction_check = is_verified
 
+        # Add persistent views for interactions
+        self.add_view(VerificationView())
+
         # Fetch all modules and their state from the config
         module_config = config.get("modules", {})
 
