@@ -23,30 +23,30 @@ class Logger:
     def _write_to_log(cls, label: str, message: str):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        with open(f"..logs/{_START_TIME}.log", "a", encoding="utf-8") as f:
+        with open(f"logs/{_START_TIME}.log", "a", encoding="utf-8") as f:
             f.write(f"[ {timestamp} ] [ {label} ] {message}\n")
 
-        print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger.RESET}] Logging started. Writing to \"logs/{_START_TIME}.log\"")
+        print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger._RESET}] Logging started. Writing to \"logs/{_START_TIME}.log\"")
 
     @classmethod
     def error(message: str, output: str = None):
-        print(f"[{Logger._BOLD}{Logger._RED} E {Logger.RESET}] {message}")
-        cls._write_to_file("E", message)
+        print(f"[{Logger._BOLD}{Logger._RED} E {Logger._RESET}] {message}")
+        cls._write_to_log("E", message)
 
         if output != None:
-            cls._write_to_file("O", message)
+            cls._write_to_log("O", message)
 
     @classmethod
     def warning(message: str):
-        print(f"[{Logger._BOLD}{Logger._YELLOW} W {Logger.RESET}] {message}")
-        cls._write_to_file("W", message)
+        print(f"[{Logger._BOLD}{Logger._YELLOW} W {Logger._RESET}] {message}")
+        cls._write_to_log("W", message)
 
     @classmethod
     def success(message: str):
-        print(f"[{Logger._BOLD}{Logger._GREEN} S {Logger.RESET}] {message}")
-        cls._write_to_file("S", message)
+        print(f"[{Logger._BOLD}{Logger._GREEN} S {Logger._RESET}] {message}")
+        cls._write_to_log("S", message)
 
     @classmethod
     def info(message: str):
-        print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger.RESET}] {message}")
-        cls._write_to_file("I", message)
+        print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger._RESET}] {message}")
+        cls._write_to_log("I", message)
