@@ -104,8 +104,7 @@ class PookieBot(commands.Bot):
             return
 
     async def on_ready(self):
-        Logger.info(f"Connected to Discord as {self.user.name}#{self.user.discriminator}")
-
+        Logger.info(f"Connected to Discord as \"{self.user.name}#{self.user.discriminator}\" (ID: {self.user.id})")
 
 client = PookieBot()
 
