@@ -5,7 +5,7 @@ import discord
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import get_emoji, is_admin, config
+from utilities.helpers import get_emoji, is_admin, config, fetch_username
 from utilities.invites import process_verification, process_ban
 
 class VerificationView(discord.ui.View):
@@ -38,7 +38,7 @@ class VerificationView(discord.ui.View):
         if member:
             # Overwrite original embed & remove buttons
             embed = Embeds.success(f"<@{member.id}> was verified by <@{interaction.user.id}>.")
-            Logger.success(f"Verified {member.global_name} (ID: {member.id})")
+            Logger.success(f"Verified \"{member.global_name}\" (ID: {member.id})")
             await interaction.message.edit(embed=embed, view=None)
         else:
             embed = Embeds.error(f"Failed to verify the user.")
@@ -60,14 +60,19 @@ class VerificationView(discord.ui.View):
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
-        reason = f"Gatekeeper ban executed by {interaction.user.global_name} (ID: {interaction.user.id})"
+        reason = f"Gatekeeper ban executed by \"{interaction.user.global_name}\" (ID: {interaction.user.id})"
 
         user_id = await process_ban(interaction.guild, interaction.message.id, reason)
 
         if user_id:
+            # Fetch username through ID, even if no longer in server
+            username = await fetch_username(interaction.client, user_id)
+
             # Overwrite original embed & remove buttons
             embed = Embeds.success(f"<@{user_id}> was banned by <@{interaction.user.id}>.")
             await interaction.message.edit(embed=embed, view=None)
+
+            Logger.warning(f"\"{interaction.user.global_name}\" (ID: {interaction.user.id}) initiated gatekeeper ban on \"{username}\" (ID: {user_id})")
         else:
             embed = Embeds.error(f"Failed to ban the user.")
             await interaction.followup.send(embed=embed)
