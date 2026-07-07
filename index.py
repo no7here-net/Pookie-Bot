@@ -44,19 +44,19 @@ class PookieBot(commands.Bot):
             synced = await self.tree.sync()
             Logger.info(f"Synced {len(synced)} commands")
         except Exception as e:
-            Logger.error(f"Failed to sync commands. Check log.", str(e))
+            Logger.error("Failed to sync commands. Check log.", str(e))
 
     # Legacy command error handler
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CheckFailure):
             return
-        Logger.error(f"Ignoring exception in command {ctx.command}. Check log.", error)
+        Logger.error(f"Ignoring exception in command {ctx.command}. Check log.", str(error))
 
     # Slash command error handler
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         # If user is missing permissions
         if isinstance(error, app_commands.MissingPermissions):
-            embed = Embeds.error(f"You don't have permission to do that.")
+            embed = Embeds.error("You don't have permission to do that.")
 
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -66,7 +66,7 @@ class PookieBot(commands.Bot):
 
         # If bot is missing permissions
         elif isinstance(error, app_commands.BotMissingPermissions):
-            embed = Embeds.error(f"I don't have permission to do that.")
+            embed = Embeds.error("I don't have permission to do that.")
 
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -96,7 +96,7 @@ class PookieBot(commands.Bot):
 
         # Handle generic error messages
         else:
-            embed = Embeds.error(f"An unexpected error occurred.")
+            embed = Embeds.error("An unexpected error occurred.")
 
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
