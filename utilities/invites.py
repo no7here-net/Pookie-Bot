@@ -7,7 +7,7 @@
 import discord
 
 from utilities.database import pool
-from utilities.helpers import config
+from utilities.helpers import config, fetch_username
 from utilities.output import Logger
 
 # Add a user to pre-verified list to bypass the gatekeeper on join
@@ -34,22 +34,22 @@ async def verify_user(member: discord.Member) -> bool:
 
     # If guild not found error
     if not server_config:
-        Logger.warning(f"Failed to verify {member.id} - server not in config.")
+        Logger.warning(f"Failed to verify \"{member.global_name}\" (ID: {member.id}) - server not in config.")
         return False
 
     # Check issuer has role
     role = member.guild.get_role(server_config.get("roles", {}).get("verified"))
 
     if not role:
-        Logger.info("Blocked non-verified member from verifying.")
+        Logger.info(f"Blocked non-verified member \"{member.global_name}\" (ID: {member.id}) from verifying.")
         return False
 
     # Grant role
     try:
         await member.add_roles(role)
-        Logger.success(f"Granted verified role to {member.global_name} (ID: {member.id})")
+        Logger.success(f"Granted verified role to \"{member.global_name}\" (ID: {member.id})")
     except Exception as e:
-        Logger.warning(f"Failed to grant verified role to {member.global_name} (ID: {member.id})")
+        Logger.warning(f"Failed to grant verified role to \"{member.global_name}\" (ID: {member.id})")
         return False
 
     # Delete from pending verifications in DB
@@ -111,12 +111,16 @@ async def process_ban(guild: discord.Guild, message_id: int, reason: str):
 
 # Bans a user & clears pending verifications
 async def ban_user(guild: discord.Guild, user_id: int, reason: str) -> bool:
+    # Fetch username through helper function
+    username = fetch_username(discord.client, user_id)
+
     try:
         # discord.Object works even if user is no longer in server
         await guild.ban(discord.Object(id=user_id), reason=reason)
-        Logger.info(f"Banned user ID \"{user_id}\". Reason: \"{reason}\"")
+
+        Logger.info(f"Banned \"{username}\" (ID: {user_id}). Reason: \"{reason}\"")
     except Exception as e:
-        Logger.warning(f"Failed to ban user ID \"{user_id}\".", str(e))
+        Logger.error(f"Failed to ban \"{username}\" (ID: {user_id}). Check log.", str(e))
         return False
 
     # Clear from pending list
