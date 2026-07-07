@@ -26,6 +26,8 @@ class Logger:
         with open(f"..logs/{_START_TIME}.log", "a", encoding="utf-8") as f:
             f.write(f"[ {timestamp} ] [ {label} ] {message}\n")
 
+        print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger.RESET}] Logging started. Writing to \"logs/{_START_TIME}.log\"")
+
     @classmethod
     def error(message: str, output: str = None):
         print(f"[{Logger._BOLD}{Logger._RED} E {Logger.RESET}] {message}")
