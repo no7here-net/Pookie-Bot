@@ -2,10 +2,12 @@
 # - Bot admin check
 # - Emoji finder
 # - HEX converter (for embed colours)
+# - Username fetcher
 # - Status checkers
 #   - Cloudflare & Google DNS checks for internet connectivity... I get the irony of it being a Discord bot ok
 #   - SSH access check
 
+import discord
 import asyncio
 import json
 import os
