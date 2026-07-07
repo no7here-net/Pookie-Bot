@@ -5,10 +5,11 @@ import os
 from discord.ext import commands
 from discord import app_commands
 
-from utilities.helps import config, is_admin
-from utilities.database import init_db
 from utilities.embeds import Embeds
 from utilities.output import Logger
+from utilities.helpers import config, is_verified
+from utilities.database import init_db
+from utilities.interactions import VerificationView
 
 class PookieBot(commands.Bot):
     def __init__(self):
