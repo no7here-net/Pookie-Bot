@@ -56,6 +56,8 @@ class PookieBot(commands.Bot):
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         # If user is missing permissions
         if isinstance(error, app_commands.MissingPermissions):
+            Logger.warning(f"Blocked unauthorized user \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\".")
+
             embed = Embeds.error("You don't have permission to do that.")
 
             if interaction.response.is_done():
@@ -66,6 +68,8 @@ class PookieBot(commands.Bot):
 
         # If bot is missing permissions
         elif isinstance(error, app_commands.BotMissingPermissions):
+            Logger.warning(f"Bot unauthorised to run command \"{interaction.command.name}\" for user \"{interaction.user.name}\" (ID: {interaction.user.id}).")
+
             embed = Embeds.error("I don't have permission to do that.")
 
             if interaction.response.is_done():
@@ -76,6 +80,8 @@ class PookieBot(commands.Bot):
 
         # If user is executing commands too fast
         elif isinstance(error, app_commands.CommandOnCooldown):
+            Logger.warning(f"Ratelimited user \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" for {error.retry_after:.1f} seconds.")
+
             embed = Embeds.error(f"You've been rate limited. Try again in {error.retry_after:.1f} seconds.")
 
             if interaction.response.is_done():
@@ -86,6 +92,8 @@ class PookieBot(commands.Bot):
 
         # If user fails global permission checks
         elif isinstance(error, app_commands.CheckFailure):
+            Logger.warning(f"Blocked unauthorized user \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" (Global Check).")
+
             embed = Embeds.error("You must be verified to use commands in this server.")
 
             if interaction.response.is_done():
@@ -96,6 +104,8 @@ class PookieBot(commands.Bot):
 
         # Handle generic error messages
         else:
+            Logger.warning(f"Unexpected error prevented \"{interaction.user.name}\" (ID: {interaction.user.id}) from running \"{interaction.command.name}\".")
+
             embed = Embeds.error("An unexpected error occurred.")
 
             if interaction.response.is_done():
