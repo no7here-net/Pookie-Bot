@@ -36,15 +36,15 @@ class Logger:
 
     @classmethod
     def warning(message: str):
-        print(f"[{Logger._BOLD}{Logger._RED} W {Logger.RESET}] {message}")
+        print(f"[{Logger._BOLD}{Logger._YELLOW} W {Logger.RESET}] {message}")
         cls._write_to_file("W", message)
 
     @classmethod
     def success(message: str):
-        print(f"[{Logger._BOLD}{Logger._RED} S {Logger.RESET}] {message}")
+        print(f"[{Logger._BOLD}{Logger._GREEN} S {Logger.RESET}] {message}")
         cls._write_to_file("S", message)
 
     @classmethod
     def info(message: str):
-        print(f"[{Logger._BOLD}{Logger._RED} I {Logger.RESET}] {message}")
+        print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger.RESET}] {message}")
         cls._write_to_file("I", message)
