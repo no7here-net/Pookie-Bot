@@ -32,6 +32,14 @@ def get_emoji(name: str) -> str:
 def get_colour(name: str) -> int:
     return int(config.get("customisation", {}).get("colours", {}).get(name, "2fbffd"), 16)
 
+# Fetch username by using their Discord ID (useful for when someone has left server for example)
+async def fetch_username(client: discord.Client, user_id: int) -> str:
+    try:
+        user = await client.fetch_user(user_id)
+        return user.global_name or user.name
+    except discord.NotFound:
+        return "Unknown User"
+
 # ===============
 # STATUS CHECKERS
 # ===============
@@ -83,7 +91,7 @@ def is_verified(interaction: discord.Interaction) -> bool:
             break
 
     # Find verified role in server
-    verified_role = server_config.get("roles", {}).get("verified")
+    verified_role_id = server_config.get("roles", {}).get("verified")
 
     # Check user has the role
     for role in interaction.user.roles:
