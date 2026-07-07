@@ -26,27 +26,27 @@ class Logger:
         with open(f"logs/{_START_TIME}.log", "a", encoding="utf-8") as f:
             f.write(f"[ {timestamp} ] [ {label} ] {message}\n")
 
-        print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger._RESET}] Logging started. Writing to \"logs/{_START_TIME}.log\"")
-
     @classmethod
-    def error(message: str, output: str = None):
+    def error(cls, message: str, output: str = None):
         print(f"[{Logger._BOLD}{Logger._RED} E {Logger._RESET}] {message}")
         cls._write_to_log("E", message)
 
         if output != None:
-            cls._write_to_log("O", message)
+            cls._write_to_log("O", output)
 
     @classmethod
-    def warning(message: str):
+    def warning(cls, message: str):
         print(f"[{Logger._BOLD}{Logger._YELLOW} W {Logger._RESET}] {message}")
         cls._write_to_log("W", message)
 
     @classmethod
-    def success(message: str):
+    def success(cls, message: str):
         print(f"[{Logger._BOLD}{Logger._GREEN} S {Logger._RESET}] {message}")
         cls._write_to_log("S", message)
 
     @classmethod
-    def info(message: str):
+    def info(cls, message: str):
         print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger._RESET}] {message}")
         cls._write_to_log("I", message)
+
+print(f"[{Logger._BOLD}{Logger._BLUE} I {Logger._RESET}] Logging started. Writing to \"logs/{_START_TIME}.log\"")
