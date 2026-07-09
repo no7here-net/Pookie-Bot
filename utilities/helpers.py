@@ -38,7 +38,7 @@ def get_colour(name: str) -> int:
 async def fetch_username(client: discord.Client, user_id: int) -> str:
     try:
         user = await client.fetch_user(user_id)
-        return user.global_name or user.name
+        return user.name
     except discord.NotFound:
         return "Unknown User"
 
@@ -49,8 +49,8 @@ async def fetch_username(client: discord.Client, user_id: int) -> str:
 # Check Cloudflare DNS & Google DNS for internet connectivity
 async def check_internet() -> bool:
     results = await asyncio.gather(
-        _ping_host("1.1.1.1", 53),
-        _ping_host("8.8.8.8", 53)
+        _ping_host("1.1.1.1"),
+        _ping_host("8.8.8.8")
     )
 
     # Return true if at least one is true
@@ -76,7 +76,7 @@ async def check_host() -> dict:
 # PERMISSION CHECKER
 # ==================
 
-def is_verified(interaction: discord.Interaction) -> bool:
+async def is_verified(interaction: discord.Interaction) -> bool:
     # Bot admin bypass
     if interaction.user.id in config.get("admins", []):
         return True
@@ -91,6 +91,10 @@ def is_verified(interaction: discord.Interaction) -> bool:
         if server.get("guild") == interaction.guild.id:
             server_config = server
             break
+
+    # Handle unknown guilds
+    if not server_config:
+        return False
 
     # Find verified role in server
     verified_role_id = server_config.get("roles", {}).get("verified")
