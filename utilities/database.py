@@ -10,15 +10,15 @@ from utilities.output import Logger
 from utilities.helpers import config
 
 # Global connection pool so other modules can access it
-pool = None
+conn_pool = None
 
 async def init_db():
-    global pool
+    global conn_pool
 
     # Fetch database info from config
-    db_host = config.get("auth", {}).get("database", {}).get("host", "localhost")
-    db_user = config.get("auth", {}).get("database", {}).get("username", "root")
     db_name = "pookie_bot"
+    db_host = config.get("auth", {}).get("database", {}).get("host", "localhost")
+    db_username = config.get("auth", {}).get("database", {}).get("username", "root")
 
     # Fetch the actual password from the environment
     db_password = os.environ.get(config.get("auth", {}).get("database", {}).get("password", ""), "")
@@ -28,7 +28,7 @@ async def init_db():
         # Connect without specifying a database
         setup_conn = await aiomysql.connect(
             host=db_host,
-            user=db_user,
+            user=db_username,
             password=db_password,
             autocommit=True
         )
@@ -43,9 +43,9 @@ async def init_db():
 
     # Connect to specific database
     try:
-        pool = await aiomysql.create_pool(
+        conn_pool = await aiomysql.create_pool(
             host=db_host,
-            user=db_user,
+            user=db_username,
             password=db_password,
             db=db_name,
             autocommit=True
@@ -56,14 +56,14 @@ async def init_db():
         return
 
     # Verify database is not missing any tables
-    async with pool.acquire() as conn:
+    async with conn_pool.acquire() as conn:
         async with conn.cursor() as cur:
             # 1. Pre-Verified Users
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS pre_verified (
                     user_id BIGINT PRIMARY KEY,
                     guild_id BIGINT NOT NULL,
-                    added_by BIGINT NOT NULL,
+                    added_by_id BIGINT NOT NULL,
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -81,7 +81,7 @@ async def init_db():
             # 3. Minecraft Accounts Linking
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS mc_accounts (
-                    discord_id BIGINT PRIMARY KEY,
+                    user_id BIGINT PRIMARY KEY,
                     mc_uuid VARCHAR(36) NOT NULL UNIQUE,
                     linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -91,8 +91,8 @@ async def init_db():
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS mc_bans (
                     mc_uuid VARCHAR(36) PRIMARY KEY,
-                    discord_id BIGINT,
-                    moderator_id BIGINT NOT NULL,
+                    user_id BIGINT,
+                    added_by_id BIGINT NOT NULL,
                     reason TEXT,
                     banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -101,10 +101,10 @@ async def init_db():
             # 5. Discord Moderation Logs
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS mod_logs (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    event_uuid VARCHAR(36) PRIMARY KEY,
                     guild_id BIGINT NOT NULL,
-                    target_id BIGINT NOT NULL,
-                    moderator_id BIGINT NOT NULL,
+                    user_id BIGINT NOT NULL,
+                    added_by_id BIGINT NOT NULL,
                     action VARCHAR(50) NOT NULL,
                     reason TEXT,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -114,7 +114,7 @@ async def init_db():
             # 6. Message Logs (Year in Review)
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS message_logs (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     message_id BIGINT NOT NULL,
                     user_id BIGINT NOT NULL,
                     guild_id BIGINT NOT NULL,
@@ -127,7 +127,7 @@ async def init_db():
             # 7. Voice Channel Logs (Year in Review)
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS vc_logs (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     user_id BIGINT NOT NULL,
                     guild_id BIGINT NOT NULL,
                     channel_id BIGINT NOT NULL,
@@ -139,7 +139,7 @@ async def init_db():
             # 8. Media Logs (Uploads from Discord CDN)
             await cur.execute("""
                 CREATE TABLE IF NOT EXISTS media_history (
-                    id VARCHAR(36) PRIMARY KEY,
+                    event_uuid VARCHAR(36) PRIMARY KEY,
                     user_id BIGINT NOT NULL,
                     context VARCHAR(50) NOT NULL,
                     reference_id BIGINT,
