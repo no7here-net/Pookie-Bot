@@ -2,6 +2,7 @@
     "auth": {
         "discord_token": "ENV_DISCORD_TOKEN",
         "database": {
+            "name": "pookie_bot",
             "host": "localhost",
             "username": "pookie_bot",
             "password": "ENV_DB_PASSWORD"
@@ -65,7 +66,7 @@
         }
     },
     "servers": [{
-        "guild": 1366470324241039481,
+        "guild_id": 1366470324241039481,
         "roles": {
             "verified": 1366576393596702761
         },
