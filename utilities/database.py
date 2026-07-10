@@ -21,7 +21,7 @@ async def init_db():
     db_username = config.get("auth", {}).get("database", {}).get("username", "root")
 
     # Fetch the actual password from the environment
-    db_password = os.environ.get(config.get("auth", {}).get("database", {}).get("password", ""), "")
+    env_key = config.get("auth", {}).get("database", {}).get("password")
 
     # Connect to mariadb to check if database exists
     try:
@@ -29,8 +29,8 @@ async def init_db():
         setup_conn = await aiomysql.connect(
             host=db_host,
             user=db_username,
-            password=db_password,
-            autocommit=True
+            autocommit=True,
+            **({"password": pwd} if (env_key and (pwd := os.environ.get(env_key))) else {})
         )
 
         async with setup_conn.cursor() as cur:
@@ -46,9 +46,9 @@ async def init_db():
         conn_pool = await aiomysql.create_pool(
             host=db_host,
             user=db_username,
-            password=db_password,
             db=db_name,
-            autocommit=True
+            autocommit=True,
+            **({"password": pwd} if (env_key and (pwd := os.environ.get(env_key))) else {})
         )
         Logger.info("Connected to MariaDB database.")
     except Exception as e:
