@@ -114,7 +114,7 @@ async def is_verified(interaction: discord.Interaction) -> bool:
 # Internal ping helper function
 async def _ping_host(host: str) -> bool:
     try:
-        # Creates a background process: ping -c 1 <host>
+        # Creates a background process: ping -c 4 <host>
         process = await asyncio.create_subprocess_exec(
             "ping", "-c", "4", host,
             stdout=asyncio.subprocess.DEVNULL,
