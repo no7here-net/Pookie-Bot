@@ -1,5 +1,4 @@
 import discord
-import asyncio
 import os
 
 from discord.ext import commands
@@ -8,15 +7,23 @@ from discord import app_commands
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import config, is_verified
-from utilities.database import init_db
 from utilities.interactions import VerificationView
+
+import utilities.database as db
 
 class PookieBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="", intents=discord.Intents.all(), help_command=None)
+        # Prefix doesn't do anything, however prevents performance issues with analysis on every message (which would happen if left blank)
+        super().__init__(command_prefix="//", intents=discord.Intents.all(), help_command=None)
+        self._login_logged = False # Guard flag to prevent multiple on_ready messages
 
     async def setup_hook(self):
-        await init_db()
+        await db.init_db()
+
+        # Check database actually initialised and is usable
+        if db.conn_pool is None:
+            Logger.error("Failed to initialise database.")
+            raise SystemExit(1)
 
         # Hook slash command errors directly to command tree
         self.tree.on_error = self.on_app_command_error
@@ -28,7 +35,7 @@ class PookieBot(commands.Bot):
         self.add_view(VerificationView())
 
         # Fetch all modules and their state from the config
-        module_config = config.get("modules", {})
+        module_config = config.get("modules") or {}
 
         # If the module is enabled, load it
         for module_name, module_state in module_config.items():
@@ -50,13 +57,17 @@ class PookieBot(commands.Bot):
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CheckFailure):
             return
-        Logger.error(f"Ignoring exception in command \"{ctx.command}\". Check log.", str(error))
+        if ctx.command is None:
+            return
+        Logger.error(f"\"{ctx.author.name}\" (ID: {ctx.author.id}) triggered an unexpected error in the command \"{ctx.command}\". Check log.", str(error))
 
     # Slash command error handler
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        cmd_name = interaction.command.name if interaction.command else "unknown"
+
         # If user is missing permissions
         if isinstance(error, app_commands.MissingPermissions):
-            Logger.warning(f"Blocked \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" due to missing permissions.")
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was blocked from executing \"{cmd_name}\" as they were missing command-specific permissions.")
 
             embed = Embeds.error("You don't have permission to do that.")
 
@@ -68,7 +79,7 @@ class PookieBot(commands.Bot):
 
         # If bot is missing permissions
         elif isinstance(error, app_commands.BotMissingPermissions):
-            Logger.warning(f"Bot unauthorised to run command \"{interaction.command.name}\" for user \"{interaction.user.name}\" (ID: {interaction.user.id}).")
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) attempted to run \"{cmd_name}\" but the bot was missing permissions.")
 
             embed = Embeds.error("I don't have permission to do that.")
 
@@ -80,7 +91,7 @@ class PookieBot(commands.Bot):
 
         # If user is executing commands too fast
         elif isinstance(error, app_commands.CommandOnCooldown):
-            Logger.warning(f"Ratelimited \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" for {error.retry_after:.1f} seconds.")
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was ratelimited from executing the command \"{cmd_name}\" for {error.retry_after:.1f} seconds.")
 
             embed = Embeds.error(f"You've been rate limited. Try again in {error.retry_after:.1f} seconds.")
 
@@ -92,7 +103,7 @@ class PookieBot(commands.Bot):
 
         # If user fails global permission checks
         elif isinstance(error, app_commands.CheckFailure):
-            Logger.warning(f"Blocked \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" due to missing global permission requirements.")
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was blocked from executing \"{cmd_name}\" as they were missing required global permissions.")
 
             embed = Embeds.error("You don't have permission to do that.")
 
@@ -104,7 +115,7 @@ class PookieBot(commands.Bot):
 
         # Handle generic error messages
         else:
-            Logger.error(f"Unexpected error prevented \"{interaction.user.name}\" (ID: {interaction.user.id}) from running \"{interaction.command.name}\". Check log.", str(error))
+            Logger.error(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) triggered an unexpected error in the command \"{cmd_name}\". Check log.", str(error))
 
             embed = Embeds.error("An unexpected error occurred.")
 
@@ -115,9 +126,22 @@ class PookieBot(commands.Bot):
             return
 
     async def on_ready(self):
-        Logger.info(f"Connected to Discord as \"{self.user.name}#{self.user.discriminator}\" (ID: {self.user.id}).")
+        if not self._login_logged:
+            self._login_logged = True
+            Logger.info(f"Connected to Discord as \"{self.user.name}#{self.user.discriminator}\" (ID: {self.user.id}).")
 
 bot = PookieBot()
 
 if __name__ == "__main__":
-    bot.run(os.environ.get(config.get("auth", {}).get("discord_token", "")), log_handler=None)
+    # Fetch non-sensitive environment key name
+    env_key = (config.get("auth") or {}).get("discord_token")
+    # Check if the key exists and if the environment has a value for it
+    if not env_key or not os.environ.get(env_key):
+        Logger.error("Bot failed to login. Missing token key in config or environment.")
+        raise SystemExit(1)
+    try:
+        # Pass the token inline
+        bot.run(os.environ.get(env_key), log_handler=None)
+    except Exception as e:
+        Logger.error("Bot failed to login. Check log.", str(e))
+        raise SystemExit(1)
