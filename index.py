@@ -50,13 +50,13 @@ class PookieBot(commands.Bot):
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CheckFailure):
             return
-        Logger.error(f"Ignoring exception in command {ctx.command}. Check log.", str(error))
+        Logger.error(f"Ignoring exception in command \"{ctx.command}\". Check log.", str(error))
 
     # Slash command error handler
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         # If user is missing permissions
         if isinstance(error, app_commands.MissingPermissions):
-            Logger.warning(f"Blocked unauthorized user \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\".")
+            Logger.warning(f"Blocked \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" due to missing permissions.")
 
             embed = Embeds.error("You don't have permission to do that.")
 
@@ -80,7 +80,7 @@ class PookieBot(commands.Bot):
 
         # If user is executing commands too fast
         elif isinstance(error, app_commands.CommandOnCooldown):
-            Logger.warning(f"Ratelimited user \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" for {error.retry_after:.1f} seconds.")
+            Logger.warning(f"Ratelimited \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" for {error.retry_after:.1f} seconds.")
 
             embed = Embeds.error(f"You've been rate limited. Try again in {error.retry_after:.1f} seconds.")
 
@@ -92,9 +92,9 @@ class PookieBot(commands.Bot):
 
         # If user fails global permission checks
         elif isinstance(error, app_commands.CheckFailure):
-            Logger.warning(f"Blocked unauthorized user \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" (Global Check).")
+            Logger.warning(f"Blocked \"{interaction.user.name}\" (ID: {interaction.user.id}) from executing the command \"{interaction.command.name}\" due to missing global permission requirements.")
 
-            embed = Embeds.error("You must be verified to use commands in this server.")
+            embed = Embeds.error("You don't have permission to do that.")
 
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -104,7 +104,7 @@ class PookieBot(commands.Bot):
 
         # Handle generic error messages
         else:
-            Logger.warning(f"Unexpected error prevented \"{interaction.user.name}\" (ID: {interaction.user.id}) from running \"{interaction.command.name}\".")
+            Logger.error(f"Unexpected error prevented \"{interaction.user.name}\" (ID: {interaction.user.id}) from running \"{interaction.command.name}\". Check log.", str(error))
 
             embed = Embeds.error("An unexpected error occurred.")
 
@@ -115,9 +115,9 @@ class PookieBot(commands.Bot):
             return
 
     async def on_ready(self):
-        Logger.info(f"Connected to Discord as \"{self.user.name}#{self.user.discriminator}\" (ID: {self.user.id})")
+        Logger.info(f"Connected to Discord as \"{self.user.name}#{self.user.discriminator}\" (ID: {self.user.id}).")
 
 bot = PookieBot()
 
 if __name__ == "__main__":
-    bot.run(os.environ.get(config["auth"]["discord_token"]), log_handler=None)
+    bot.run(os.environ.get(config.get("auth", {}).get("discord_token", "")), log_handler=None)
