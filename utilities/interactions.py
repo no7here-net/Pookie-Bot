@@ -5,13 +5,20 @@ import discord
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import get_emoji, is_admin, config, fetch_username
+from utilities.helpers import get_emoji, is_admin, config
 from utilities.invites import process_verification, process_ban
 
 class VerificationView(discord.ui.View):
     def __init__(self):
         # Disables timeout, required for persistent view
         super().__init__(timeout=None)
+
+        # Dynamically evaluate and assign the emojis when the view is instantiated
+        for child in self.children:
+            if child.custom_id == "persistent_view:verify":
+                child.emoji = discord.PartialEmoji.from_str(get_emoji("success"))
+            elif child.custom_id == "persistent_view:ban":
+                child.emoji = discord.PartialEmoji.from_str(get_emoji("error"))
 
     # Verify button
     @discord.ui.button(
@@ -21,28 +28,38 @@ class VerificationView(discord.ui.View):
     )
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Grab verified role ID from config and check if the user has a role matching that ID
-        verified_role_id = next((s for s in config.get("servers", []) if s.get("guild") == interaction.guild.id), {}).get("roles", {}).get("verified")
+        server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == interaction.guild.id), {}) or {}
+        verified_role_id = (server_config.get("roles") or {}).get("verified")
 
         # Block if they aren't verified or a bot admin
         if not (any(role.id == verified_role_id for role in interaction.user.roles) or is_admin(interaction.user.id)):
-            embed = Embeds.error("Only verified members can approve new users.")
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to verify the member in a message but failed permission checks (Message ID: {interaction.message.id}).")
+            embed = Embeds.error("You don't have permission to do that.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
-        # Pass message ID to backend
-        member = await process_verification(interaction.guild, interaction.message.id)
+        Logger.info(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) is attempting to verify a member (Message ID: {interaction.message.id}).")
 
-        if member:
+        # Pass message ID to backend
+        user_id, username = await process_verification(interaction.client, interaction.guild, interaction.message.id)
+
+        if user_id:
+            Logger.info(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) verified \"{username}\" (ID: {user_id}).")
+
             # Overwrite original embed & remove buttons
-            embed = Embeds.success(f"<@{member.id}> was verified by <@{interaction.user.id}>.")
-            Logger.success(f"Verified \"{member.global_name}\" (ID: {member.id})")
+            embed = Embeds.success(f"<@{user_id}> was verified by <@{interaction.user.id}>.")
             await interaction.message.edit(embed=embed, view=None)
+
+            # Respond to ephemeral thinking
+            embed = Embeds.success(f"<@{user_id}> has been verified.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            embed = Embeds.error(f"Failed to verify the user.")
-            await interaction.followup.send(embed=embed)
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) failed to verify a member (Message ID: {interaction.message.id}).")
+            embed = Embeds.error("Failed to verify the user.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
     # Ban button
     @discord.ui.button(
@@ -53,26 +70,30 @@ class VerificationView(discord.ui.View):
     async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Require bot admin / user ban perms to run ban action
         if not (interaction.user.guild_permissions.ban_members or is_admin(interaction.user.id)):
-            embed = Embeds.error("You do not have permission to perform this action.")
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to ban the member in a message but failed permission checks (Message ID: {interaction.message.id}).")
+            embed = Embeds.error("You don't have permission to do that.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
-        reason = f"Gatekeeper ban executed by \"{interaction.user.global_name}\" (ID: {interaction.user.id})"
+        reason = f"Gatekeeper ban executed by \"{interaction.user.name}\" (ID: {interaction.user.id})."
 
-        user_id = await process_ban(interaction.guild, interaction.message.id, reason)
+        user_id, username = await process_ban(interaction.client, interaction.guild, interaction.message.id, interaction.user.id, reason)
 
         if user_id:
-            # Fetch username through ID, even if no longer in server
-            username = await fetch_username(interaction.client, user_id)
+            Logger.info(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) initiated gatekeeper ban on \"{username}\" (ID: {user_id}).")
 
             # Overwrite original embed & remove buttons
             embed = Embeds.success(f"<@{user_id}> was banned by <@{interaction.user.id}>.")
             await interaction.message.edit(embed=embed, view=None)
 
-            Logger.warning(f"\"{interaction.user.global_name}\" (ID: {interaction.user.id}) initiated gatekeeper ban on \"{username}\" (ID: {user_id})")
+            # Respond to ephemeral thinking
+            embed = Embeds.success(f"<@{user_id}> has been banned.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            embed = Embeds.error(f"Failed to ban the user.")
-            await interaction.followup.send(embed=embed)
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) failed to initiate gatekeeper ban (Message ID: {interaction.message.id}).")
+
+            embed = Embeds.error("Failed to ban the user.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
