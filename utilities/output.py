@@ -165,6 +165,7 @@ try:
     # Ensure any remaining logs in the queue are written to the file before the bot completely exits
     @atexit.register
     def _flush_logs():
+        Logger.info("Bot shutting down gracefully.")
         Logger._log_queue.join()
 except Exception as e:
     # Fetch current timestamp
