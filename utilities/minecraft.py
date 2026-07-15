@@ -114,7 +114,7 @@ async def whitelist_logic(client: discord.Client, user_id: int, mc_username: str
                 discord_ban_reason = await cur.fetchone()
 
                 if discord_ban_reason:
-                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from linking the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as they are banned from linking accounts.")
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from linking the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is banned from linking accounts.")
 
                     return {
                         "success": False,
@@ -137,7 +137,7 @@ async def whitelist_logic(client: discord.Client, user_id: int, mc_username: str
                             "error": "Failed to reach Mojang's API for account information."
                         }
 
-                    Logger.warning(f"\"{username}\" (ID: {user_id}) is already linked to the Minecraft account \"{linked_mc_username}\" (UUID: {linked_mc_uuid}).")
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from linking to the Minecraft account \"{linked_mc_username}\" (UUID: {linked_mc_uuid}) as it is already linked.")
 
                     return {
                         "success": False,
@@ -154,7 +154,7 @@ async def whitelist_logic(client: discord.Client, user_id: int, mc_username: str
                     linked_user_id = result[0]
                     linked_username = await fetch_username(client, linked_user_id)
 
-                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from linking the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is already connected to another account \"{linked_username}\" (ID: {linked_user_id}).")
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from linking the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is already connected to another user \"{linked_username}\" (ID: {linked_user_id}).")
 
                     return {
                         "success": False,
@@ -194,6 +194,141 @@ async def whitelist_logic(client: discord.Client, user_id: int, mc_username: str
     mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
 
     Logger.info(f"\"{username}\" (ID: {user_id}) successfully whitelisted \"{mc_username}\" (UUID: {mc_uuid}).")
+
+    # Return info
+    return {
+        "success": True,
+        "uuid": mc_uuid,
+        "avatar": mc_avatar,
+    }
+
+# Fetches and unlinks Minecraft & Discord account
+async def unlink_logic(client: discord.Client, user_id: int, mc_username: str) -> dict:
+    # Fetch Discord username from ID provided in attributes. Safe to do here as its value is guarded by the functions that trigger this one.
+    username = await fetch_username(client, user_id)
+
+    if not re.match(r"^[a-zA-Z0-9_]{2,16}$", mc_username):
+        Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking the Minecraft account \"{mc_username}\" due to invalid characters in their Minecraft username.")
+
+        return {
+            "success": False,
+            "error": "Invalid Minecraft username. Usernames can only contain letters, numbers, and underscores."
+        }
+
+    # Fetch unique (and unchangeable) ID for the MC account
+    mc_uuid = await _fetch_mc_uuid(mc_username)
+
+    # If it fails to fetch the UUID, error out
+    if mc_uuid in ("failed", "unknown"):
+        Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking the Minecraft account \"{mc_username}\" as their UUID could not be found.")
+
+        return {
+            "success": False,
+            "error": "Failed to find Minecraft account."
+        }
+
+    # Database security checks
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                # Is the Minecraft account banned
+                await cur.execute("SELECT reason FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
+
+                mc_ban_reason = await cur.fetchone()
+
+                if mc_ban_reason:
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is banned.")
+
+                    return {
+                        "success": False,
+                        "error": "This Minecraft account is banned. No action can be taken."
+                    }
+
+                # Is the Discord account linked to a banned Minecraft account
+                await cur.execute("SELECT reason FROM mc_bans WHERE user_id = %s", (user_id,))
+
+                discord_ban_reason = await cur.fetchone()
+
+                if discord_ban_reason:
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is banned from linking accounts.")
+
+                    return {
+                        "success": False,
+                        "error": "This Discord account is linked to a different banned Minecraft account. No action can be taken."
+                    }
+
+                # Has user NOT linked an account
+                await cur.execute("SELECT mc_uuid FROM mc_accounts WHERE user_id = %s", (user_id,))
+
+                result = await cur.fetchone()
+
+                if not result:
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking \"{mc_username}\" (UUID: {mc_uuid}) as it is not linked any Minecraft account.")
+
+                    return {
+                        "success": False,
+                        "error": "Your Discord account is not linked to a Minecraft account."
+                    }
+
+                # Is this account matched with someone else
+                await cur.execute("SELECT user_id FROM mc_accounts WHERE mc_uuid = %s", (mc_uuid,))
+
+                result = await cur.fetchone()
+
+                # If the Minecraft account is not linked to a Discord account, it will not return anything
+                if not result:
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is not linked to any Minecraft account.")
+
+                    return {
+                        "success": False,
+                        "error": "Your Discord account is not linked or whitelisted to a Minecraft account."
+                    }
+
+                if result[0] != user_id:
+                    # Fetch account details of the Discord account the Minecraft account is already linked to
+                    linked_user_id = result[0]
+                    linked_username = await fetch_username(client, linked_user_id)
+
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking \"{mc_username}\" (UUID: {mc_uuid}) as it is linked to the account \"{linked_username}\" (ID: {linked_user_id}).")
+
+                    return {
+                        "success": False,
+                        "error": "Your Discord account is not linked to this Minecraft account."
+                    }
+    except Exception:
+        Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking the Minecraft account \"{mc_username}\" due to an exception when accessing the database.")
+
+        return {
+            "success": False,
+            "error": "Failed to connect to database to perform checks."
+        }
+
+    # If checks pass
+    response = await _send_velocity_command(f"whitelist remove {mc_username}")
+
+    Logger.info(f"\"{username}\" (ID: {user_id}) attempted to remove the Minecraft account \"{mc_username}\" from the whitelist. Pushing response to log file.", response)
+
+    # Check response
+    if "Removed " not in response:
+        Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+
+        return {
+            "success": False,
+            "error": "Failed to execute whitelist command on the server."
+        }
+
+    # Update database & handle any possible issues
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s AND mc_uuid = %s", (user_id, mc_uuid,))
+    except Exception:
+        Logger.warning(f"\"{username}\" (ID: {user_id}) did pass unlink logic and has been unlinked, but an error occurred when updating the database with the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+
+    # Fetch MC avatar from skin
+    mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
+
+    Logger.info(f"\"{username}\" (ID: {user_id}) successfully unlinked \"{mc_username}\" (UUID: {mc_uuid}).")
 
     # Return info
     return {
