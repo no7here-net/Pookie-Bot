@@ -50,7 +50,7 @@ class VerificationView(discord.ui.View):
             Logger.info(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) verified \"{username}\" (ID: {user_id}).")
 
             # Overwrite original embed & remove buttons
-            embed = Embeds.success(f"<@{user_id}> was verified by <@{interaction.user.id}>.")
+            embed = Embeds.info(f"<@{user_id}> was verified by <@{interaction.user.id}>.")
             await interaction.message.edit(embed=embed, view=None)
 
             # Respond to ephemeral thinking
@@ -86,7 +86,7 @@ class VerificationView(discord.ui.View):
             Logger.info(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) initiated gatekeeper ban on \"{username}\" (ID: {user_id}).")
 
             # Overwrite original embed & remove buttons
-            embed = Embeds.success(f"<@{user_id}> was banned by <@{interaction.user.id}>.")
+            embed = Embeds.info(f"<@{user_id}> was banned by <@{interaction.user.id}>.")
             await interaction.message.edit(embed=embed, view=None)
 
             # Respond to ephemeral thinking
