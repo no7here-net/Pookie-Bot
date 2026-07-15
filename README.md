@@ -21,14 +21,11 @@
         - [ ] Cloudflare Services
 - [ ] Invites
 - [ ] Minecraft
-    - [ ] Whitelist
+    - [x] Whitelist
+    - [x] Unlink
     - [ ] Blacklist
-    - [ ] RCON
-        - [ ] Velocity
-        - [ ] Survival
-        - [ ] Creative
-        - [ ] Redstone
-    - [ ] Status Monitoring
+    - [ ] RCON commands
+    - [x] Status Monitoring
     - [ ] Automatic Updates
 - [ ] Moderation
     - [ ] Kick
