@@ -4,10 +4,12 @@
 import discord
 import asyncio
 import aiohttp
+import uuid
 import os
 import re
 
 from urllib.parse import urlparse
+from typing import Literal
 from mcrcon import MCRcon
 
 import utilities.database as db
@@ -174,8 +176,8 @@ async def whitelist_logic(client: discord.Client, user_id: int, mc_username: str
     Logger.info(f"\"{username}\" (ID: {user_id}) attempted to add the Minecraft account \"{mc_username}\" to the whitelist. Pushing response to log file.", response)
 
     # Check response
-    if "Added " not in response:
-        Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+    if "added player" not in response.lower():
+        Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist addition command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
 
         return {
             "success": False,
@@ -263,7 +265,7 @@ async def unlink_logic(client: discord.Client, user_id: int, mc_username: str) -
                 result = await cur.fetchone()
 
                 if not result:
-                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking \"{mc_username}\" (UUID: {mc_uuid}) as it is not linked any Minecraft account.")
+                    Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unlinking \"{mc_username}\" (UUID: {mc_uuid}) as it is not linked to any Minecraft account.")
 
                     return {
                         "success": False,
@@ -309,7 +311,7 @@ async def unlink_logic(client: discord.Client, user_id: int, mc_username: str) -
     Logger.info(f"\"{username}\" (ID: {user_id}) attempted to remove the Minecraft account \"{mc_username}\" from the whitelist. Pushing response to log file.", response)
 
     # Check response
-    if "Removed " not in response:
+    if "removed player" not in response.lower():
         Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
 
         return {
@@ -336,6 +338,245 @@ async def unlink_logic(client: discord.Client, user_id: int, mc_username: str) -
         "uuid": mc_uuid,
         "avatar": mc_avatar,
     }
+
+# Fetch and ban Minecraft (and Discord if linked) account
+async def blacklist_logic(client: discord.Client, action: Literal["Ban", "Unban"], guild_id: int, added_by_id: int, mc_username: str, reason: str) -> dict:
+    # Fetch Discord username from ID provided in attributes. Safe to do here as its value is guarded by the functions that trigger this one.
+    added_by_username = await fetch_username(client, added_by_id)
+
+    if not re.match(r"^[a-zA-Z0-9_]{2,16}$", mc_username):
+        Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from banning the Minecraft account \"{mc_username}\" due to invalid characters in the Minecraft username provided.")
+
+        return {
+            "success": False,
+            "error": "Invalid Minecraft username. Usernames can only contain letters, numbers, and underscores."
+        }
+
+    # Fetch unique (and unchangeable) ID for the MC account
+    mc_uuid = await _fetch_mc_uuid(mc_username)
+
+    # Create variable so that it can be checked even if its value is never set
+    user_id = None
+
+    # If it fails to fetch the UUID, error out
+    if mc_uuid in ("failed", "unknown"):
+        Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from banning the Minecraft account \"{mc_username}\" as their UUID could not be found.")
+
+        return {
+            "success": False,
+            "error": "Failed to find Minecraft account."
+        }
+
+    if action == "Ban":
+        # Database security checks
+        try:
+            async with db.conn_pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # Is the Minecraft account banned
+                    await cur.execute("SELECT reason FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
+
+                    result = await cur.fetchone()
+
+                    if result:
+                        mc_ban_reason = result[0]
+
+                        Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from banning the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is already banned (Reason: {mc_ban_reason}).")
+
+                        return {
+                            "success": False,
+                            "error": "This Minecraft account is already banned."
+                        }
+
+                    # Check if the account is whitelisted, so the Discord account can also be blacklisted
+                    await cur.execute("SELECT user_id FROM mc_accounts WHERE mc_uuid = %s", (mc_uuid,))
+
+                    result = await cur.fetchone()
+
+                    if result:
+                        user_id = result[0]
+                        username = await fetch_username(client, user_id)
+        except Exception:
+            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from banning the Minecraft account \"{mc_username}\" due to an exception when accessing the database.")
+
+            return {
+                "success": False,
+                "error": "Failed to connect to database to perform checks."
+            }
+
+        # If the account is whitelisted, remove them from the whitelist first
+        if user_id:
+            response = await _send_velocity_command(f"whitelist remove {mc_username}")
+
+            if "removed player" not in response.lower() and "not in whitelist" not in response.lower():
+                Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute whitelist removal command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+
+                return {
+                    "success": False,
+                    "error": "Failed to execute whitelist removal command on the server."
+                }
+
+        # This is primarily run to disconnect them if they are actively connected. A ban plugin will be implemented in the future as this plugin only supports one list at a time.
+        response = await _send_velocity_command(f"blacklist add {mc_username}")
+
+        if "added player" not in response.lower():
+            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute blacklist addition command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+
+            return {
+                "success": False,
+                "error": "Failed to execute blacklist addition command on the server."
+            }
+
+        # Update database & handle any possible issues (TBD)
+        try:
+            async with db.conn_pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # Indicate the start of a transaction group so that rather than executing each one instantly one at a time which could result in de-synced requests, they all happen together
+                    await conn.begin()
+
+                    try:
+                        if user_id:
+                            # Delete existing connected account from database
+                            await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s AND mc_uuid = %s", (user_id, mc_uuid,))
+
+                            # Add MC account to ban database and link with its Discord account
+                            await cur.execute("INSERT INTO mc_bans (mc_uuid, user_id, added_by_id, reason) VALUES (%s, %s, %s, %s)", (mc_uuid, user_id, added_by_id, reason,))
+
+                            # Add to mod log
+                            await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_ban", reason,))
+                        else:
+                            Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) is blacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}), which is not connected to a Discord account.")
+
+                            # Add MC account to ban database but leave Discord ID blank
+                            await cur.execute("INSERT INTO mc_bans (mc_uuid, added_by_id, reason) VALUES (%s, %s, %s)", (mc_uuid, added_by_id, reason,))
+
+                            # No mod log can be added, as there is no associated Discord account, which is a required column in the database
+
+                        # Save simultaneously
+                        await conn.commit()
+                    except Exception:
+                        # If an error occurs executing the transactions in bulk, roll them back to prevent weird bugs with future database transactions
+                        await conn.rollback()
+                        raise
+        except Exception:
+            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) successfully banned the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) server-side, but an error occurred when updating the database.")
+
+            return {
+                "success": False,
+                "error": "Failed to update the database."
+            }
+
+        # Fetch MC avatar from skin
+        mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
+
+        Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) successfully blacklisted \"{mc_username}\" (UUID: {mc_uuid}){f" and its associated Discord account \"{username}\" (ID: {user_id})" if user_id else ""}.")
+
+        # Return info
+        return {
+            "success": True,
+            "uuid": mc_uuid,
+            "avatar": mc_avatar,
+            **({"user_id": user_id} if user_id else {})
+        }
+
+    elif action == "Unban":
+        # Database security checks
+        try:
+            async with db.conn_pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # Check if the account is currently whitelisted
+                    await cur.execute("SELECT user_id FROM mc_accounts WHERE mc_uuid = %s", (mc_uuid,))
+
+                    result = await cur.fetchone()
+
+                    if result:
+                        Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from unbanning the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is whitelisted.")
+
+                        return {
+                            "success": False,
+                            "error": "The Minecraft account is currently whitelisted."
+                        }
+
+                    # Check for an existing ban
+                    await cur.execute("SELECT user_id, added_by_id, reason FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
+
+                    result = await cur.fetchone()
+
+                    if not result:
+                        Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from unbanning the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is not currently banned.")
+
+                        return {
+                            "success": False,
+                            "error": "This Minecraft account is not banned."
+                        }
+
+                    # Assign database values to variables
+                    user_id = result[0]
+                    existing_added_by_id = result[1]
+                    existing_reason = result[2]
+
+                    # Fetch usernames for user IDs in database
+                    username = await fetch_username(client, user_id) if user_id else None
+                    existing_added_by_username = await fetch_username(client, existing_added_by_id) if existing_added_by_id else None
+        except Exception:
+            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from unbanning the Minecraft account \"{mc_username}\" due to an exception when accessing the database.")
+
+            return {
+                "success": False,
+                "error": "Failed to connect to database to perform checks."
+            }
+
+        try:
+            async with db.conn_pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # Indicate the start of a transaction group so that rather than executing each one instantly one at a time which could result in de-synced requests, they all happen together
+                    await conn.begin()
+
+                    try:
+                        # Remove ban
+                        await cur.execute("DELETE FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
+
+                        if user_id:
+                            await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_unban", reason,))
+
+                        # Save simultaneously
+                        await conn.commit()
+                    except Exception:
+                        # If something went wrong, clean the connection before letting it go
+                        await conn.rollback()
+                        raise
+        except Exception:
+            # If an error occurs executing the transactions in bulk, roll them back to prevent weird bugs with future database transactions
+            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute blacklist removal from database for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}), who was banned by \"{existing_added_by_username}\" (ID: {existing_added_by_id}) for {existing_reason}.")
+
+            return {
+                "success": False,
+                "error": "Failed to update the database to remove the ban."
+            }
+
+        # This command currently does nothing, as the existing whitelist plugin only supports whitelist OR blacklist, not both. A ban plugin will be implemented in the future so this is mostly skeleton code for that.
+        response = await _send_velocity_command(f"blacklist remove {mc_username}")
+
+        if "removed player" not in response.lower():
+            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute blacklist removal command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+
+            return {
+                "success": False,
+                "error": "Failed to execute blacklist removal command on the server."
+            }
+
+        # Fetch MC avatar from skin
+        mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
+
+        Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) successfully unbanned \"{mc_username}\" (UUID: {mc_uuid}){f" and its associated Discord account \"{username}\" (ID: {user_id})" if user_id else ""}.")
+
+        # Return info
+        return {
+            "success": True,
+            "uuid": mc_uuid,
+            "avatar": mc_avatar,
+            "added_by_id": existing_added_by_id,
+            **({"user_id": user_id} if user_id else {})
+        }
 
 # ================
 # INTERNAL HELPERS
