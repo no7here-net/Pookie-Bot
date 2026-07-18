@@ -1,5 +1,7 @@
 import discord
 
+from typing import Literal
+from discord import app_commands
 from discord.ext import commands, tasks
 
 import utilities.database as db
@@ -7,7 +9,7 @@ import utilities.database as db
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import config, fetch_username
-from utilities.invites import ban_user
+from utilities.invites import ban_user, add_preverify, remove_preverify, list_preverify
 
 class Invites(commands.Cog):
     def __init__(self, bot):
@@ -18,6 +20,75 @@ class Invites(commands.Cog):
 
     def cog_unload(self):
         self.verify_sweeper.cancel()
+
+    @app_commands.command(name="preverify", description="Manage automatic member verification on member join.")
+    @app_commands.describe(action="Whether to add, remove, or list pre-verified users.", user="User to target. Required for Add and Remove.")
+    async def preverify(self, interaction: discord.Interaction, action: Literal["Add", "Remove", "List"], user: discord.User = None):
+        # Require command to be in a server, as pre-verification is tracked per-server
+        if not interaction.guild:
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to use preverify but was blocked because the action was taken in DMs.")
+            embed = Embeds.error("This action is only supported in servers.")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Add & remove target a specific user, so one must be provided
+        if action in ("Add", "Remove") and user is None:
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} a pre-verification without providing a user.")
+            embed = Embeds.error("You must provide a user for this action.")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Prevent Discord timing out
+        await interaction.response.defer(ephemeral=True)
+
+        if action == "Add":
+            # Send info to logic
+            result = await add_preverify(self.bot, interaction.guild.id, user.id, interaction.user.id)
+
+            if not result.get("success"):
+                # Error message already ends with a full stop
+                embed = Embeds.error(result.get("error"))
+            else:
+                embed = Embeds.success(f"<@{user.id}> will bypass verification when they join.")
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        elif action == "Remove":
+            # Send info to logic
+            result = await remove_preverify(self.bot, interaction.guild.id, user.id, interaction.user.id)
+
+            if not result.get("success"):
+                # Error message already ends with a full stop
+                embed = Embeds.error(result.get("error"))
+            else:
+                embed = Embeds.success(f"<@{user.id}> will no longer bypass verification.")
+
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+        elif action == "List":
+            # Fetch all entries for this server
+            result = await list_preverify(interaction.guild.id)
+
+            if not result.get("success"):
+                embed = Embeds.error(result.get("error"))
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            entries = result.get("entries") or ()
+
+            if not entries:
+                embed = Embeds.info("No users are currently pre-verified.")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            # Cap the output so huge lists cannot overflow the embed description limit
+            lines = [f"<@{user_id}> - added by <@{added_by_id}> <t:{int(added_at.timestamp())}:R>" for user_id, added_by_id, added_at in entries[:25]]
+
+            if len(entries) > 25:
+                lines.append(f"...and {len(entries) - 25} more.")
+
+            embed = Embeds.info("\n".join(lines))
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
     # Run every hour to catch users who didn't get verified in 24h
     @tasks.loop(hours=1)
