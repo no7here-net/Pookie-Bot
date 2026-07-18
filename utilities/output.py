@@ -28,6 +28,10 @@ class Logger:
     _RESET = "\033[0m"
     _BOLD = "\033[1m"
 
+    # ===============
+    # LOGGING HELPERS
+    # ===============
+
     # Ensure logs are written in a guaranteed sequence to prevent corruption or race conditions
     @classmethod
     def _worker(cls):
@@ -39,22 +43,15 @@ class Logger:
                 with open(f"logs/{_START_TIME}.log", "a", encoding="utf-8") as f:
                     f.write(entry)
             except Exception as e:
-                # Fall back to terminal
-
-                # Fetch current timestamp
-                timestamp = f"[{Logger._BOLD}{Logger._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {Logger._RESET}] "
-
-                # Add [ E ] prefix to log for error
-                state = f"[{Logger._BOLD}{Logger._RED} E {Logger._RESET}] "
-
-                print(f"{timestamp}{state}Failed to write to log file.")
-                print(e)
+                # Fall back to terminal via the shared emergency printer
+                cls._print_fallback("Failed to write to log file.", e)
 
                 # Stop entire bot, even if this is running in a subthread
                 os._exit(1)
             finally:
                 cls._log_queue.task_done()
 
+    # Shared handler for writing to log file safely
     @classmethod
     def _write_to_log(cls, label: str, message: str, task: bool = False, output: str = None):
         # Fetch current timestamp
@@ -72,88 +69,64 @@ class Logger:
         # Push to the background worker queue
         cls._log_queue.put(formatted_entry)
 
+    # Shared print and write to log function
     @classmethod
-    def error(cls, message: str, output: str = None, task: bool = False):
+    def _print(cls, label: str, colour: str, message: str, output: str = None, task: bool = False):
         # Fetch current timestamp
-        timestamp = f"[{Logger._BOLD}{Logger._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {Logger._RESET}] "
+        timestamp = f"[{cls._BOLD}{cls._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {cls._RESET}] "
 
         # Add [ T ] prefix to log if it's a task
-        task_msg = f"[{Logger._BOLD}{Logger._PURPLE} T {Logger._RESET}] " if task else ""
+        task_msg = f"[{cls._BOLD}{cls._PURPLE} T {cls._RESET}] " if task else ""
 
-        # Add [ E ] prefix to log for error
-        state = f"[{Logger._BOLD}{Logger._RED} E {Logger._RESET}] "
+        # Add level prefix to log (e.g. [ E ] for error)
+        state = f"[{cls._BOLD}{colour} {label} {cls._RESET}] "
 
         # Print new entry
         print(f"{timestamp}{state}{task_msg}{message}")
 
         # Write to log file
-        cls._write_to_log("E", message, task, output=output)
+        cls._write_to_log(label, message, task, output=output)
+
+    # Fallback printer for failures within logging system itself where queue / log file can't be trusted
+    @classmethod
+    def _print_fallback(cls, message: str, e: Exception):
+        # Fetch current timestamp
+        timestamp = f"[{cls._BOLD}{cls._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {cls._RESET}] "
+
+        # Add [ E ] prefix to log for error
+        state = f"[{cls._BOLD}{cls._RED} E {cls._RESET}] "
+
+        # Print error
+        print(f"{timestamp}{state}{message}")
+        print(e)
+
+    # ==============
+    # PUBLIC METHODS
+    # ==============
+
+    @classmethod
+    def error(cls, message: str, output: str = None, task: bool = False):
+        cls._print("E", cls._RED, message, output=output, task=task)
 
     @classmethod
     def warning(cls, message: str, output: str = None, task: bool = False):
-        # Fetch current timestamp
-        timestamp = f"[{Logger._BOLD}{Logger._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {Logger._RESET}] "
-
-        # Add [ T ] prefix to log if it's a task
-        task_msg = f"[{Logger._BOLD}{Logger._PURPLE} T {Logger._RESET}] " if task else ""
-
-        # Add [ W ] prefix to log for warning
-        state = f"[{Logger._BOLD}{Logger._YELLOW} W {Logger._RESET}] "
-
-        # Print new entry
-        print(f"{timestamp}{state}{task_msg}{message}")
-
-        # Write to log file
-        cls._write_to_log("W", message, task, output=output)
+        cls._print("W", cls._YELLOW, message, output=output, task=task)
 
     @classmethod
     def success(cls, message: str, output: str = None, task: bool = False):
-        # Fetch current timestamp
-        timestamp = f"[{Logger._BOLD}{Logger._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {Logger._RESET}] "
-
-        # Add [ T ] prefix to log if it's a task
-        task_msg = f"[{Logger._BOLD}{Logger._PURPLE} T {Logger._RESET}] " if task else ""
-
-        # Add [ S ] prefix to log for success
-        state = f"[{Logger._BOLD}{Logger._GREEN} S {Logger._RESET}] "
-
-        # Print new entry
-        print(f"{timestamp}{state}{task_msg}{message}")
-
-        # Write to log file
-        cls._write_to_log("S", message, task, output=output)
+        cls._print("S", cls._GREEN, message, output=output, task=task)
 
     @classmethod
     def info(cls, message: str, output: str = None, task: bool = False):
-        # Fetch current timestamp
-        timestamp = f"[{Logger._BOLD}{Logger._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {Logger._RESET}] "
-
-        # Add [ T ] prefix to log if it's a task
-        task_msg = f"[{Logger._BOLD}{Logger._PURPLE} T {Logger._RESET}] " if task else ""
-
-        # Add [ I ] prefix to log for info
-        state = f"[{Logger._BOLD}{Logger._BLUE} I {Logger._RESET}] "
-
-        # Print new entry
-        print(f"{timestamp}{state}{task_msg}{message}")
-
-        # Write to log file
-        cls._write_to_log("I", message, task, output=output)
+        cls._print("I", cls._BLUE, message, output=output, task=task)
 
 try:
     # Create log folder if it doesn't exist
     if not os.path.exists("logs"):
         os.mkdir("logs")
 except Exception as e:
-    # Fetch current timestamp
-    timestamp = f"[{Logger._BOLD}{Logger._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {Logger._RESET}] "
-
-    # Add [ E ] prefix to log for error
-    state = f"[{Logger._BOLD}{Logger._RED} E {Logger._RESET}] "
-
-    # Print error
-    print(f"{timestamp}{state}Failed to create logs folder.")
-    print(e)
+    # Print via the shared emergency printer
+    Logger._print_fallback("Failed to create logs folder.", e)
 
     # Abort
     raise SystemExit(1)
@@ -168,15 +141,8 @@ try:
         Logger.info("Bot shutting down gracefully.")
         Logger._log_queue.join()
 except Exception as e:
-    # Fetch current timestamp
-    timestamp = f"[{Logger._BOLD}{Logger._BLUE} {datetime.datetime.now():%Y-%m-%d %H:%M:%S} {Logger._RESET}] "
-
-    # Add [ E ] prefix to log for error
-    state = f"[{Logger._BOLD}{Logger._RED} E {Logger._RESET}] "
-
-    # Print error
-    print(f"{timestamp}{state}Failed to start background logging worker thread.")
-    print(e)
+    # Print via the shared emergency printer
+    Logger._print_fallback("Failed to start background logging worker thread.", e)
 
     # Abort
     raise SystemExit(1)
