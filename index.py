@@ -53,6 +53,23 @@ class PookieBot(commands.Bot):
         except Exception as e:
             Logger.error("Failed to sync commands. Check log.", str(e))
 
+    # Gracefully release shared resources when the bot shuts down
+    async def close(self):
+        # Close the shared HTTP session used for Mojang / avatar lookups
+        try:
+            await close_http_session()
+        except Exception as e:
+            Logger.warning("Failed to close the shared HTTP session cleanly.", str(e))
+
+        # Close the database connection pool
+        try:
+            if db.conn_pool is not None:
+                db.conn_pool.close()
+                await db.conn_pool.wait_closed()
+        except Exception as e:
+            Logger.warning("Failed to close the database connection pool cleanly.", str(e))
+        await super().close()
+
     # Legacy command error handler
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.CheckFailure):
@@ -61,6 +78,15 @@ class PookieBot(commands.Bot):
             return
         Logger.error(f"\"{ctx.author.name}\" (ID: {ctx.author.id}) triggered an unexpected error in the command \"{ctx.command}\". Check log.", str(error))
 
+    # Shared responder for command errors
+    async def _send_error_embed(self, interaction: discord.Interaction, description: str):
+        embed = Embeds.error(description)
+
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
     # Slash command error handler
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         cmd_name = interaction.command.name if interaction.command else "unknown"
@@ -68,62 +94,27 @@ class PookieBot(commands.Bot):
         # If user is missing permissions
         if isinstance(error, app_commands.MissingPermissions):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was blocked from executing \"{cmd_name}\" as they were missing command-specific permissions.")
-
-            embed = Embeds.error("You don't have permission to do that.")
-
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+            await self._send_error_embed(interaction, "You don't have permission to do that.")
 
         # If bot is missing permissions
         elif isinstance(error, app_commands.BotMissingPermissions):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) attempted to run \"{cmd_name}\" but the bot was missing permissions.")
-
-            embed = Embeds.error("I don't have permission to do that.")
-
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+            await self._send_error_embed(interaction, "I don't have permission to do that.")
 
         # If user is executing commands too fast
         elif isinstance(error, app_commands.CommandOnCooldown):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was ratelimited from executing the command \"{cmd_name}\" for {error.retry_after:.1f} seconds.")
-
-            embed = Embeds.error(f"You've been rate limited. Try again in {error.retry_after:.1f} seconds.")
-
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+            await self._send_error_embed(interaction, f"You've been rate limited. Try again in {error.retry_after:.1f} seconds.")
 
         # If user fails global permission checks
         elif isinstance(error, app_commands.CheckFailure):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was blocked from executing \"{cmd_name}\" as they were missing required global permissions.")
-
-            embed = Embeds.error("You don't have permission to do that.")
-
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+            await self._send_error_embed(interaction, "You don't have permission to do that.")
 
         # Handle generic error messages
         else:
             Logger.error(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) triggered an unexpected error in the command \"{cmd_name}\". Check log.", str(error))
-
-            embed = Embeds.error("An unexpected error occurred.")
-
-            if interaction.response.is_done():
-                await interaction.followup.send(embed=embed, ephemeral=True)
-            else:
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
+            await self._send_error_embed(interaction, "An unexpected error occurred.")
 
     async def on_ready(self):
         if not self._login_logged:
