@@ -81,14 +81,48 @@ class Minecraft(commands.Cog):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
-            # If successful, create fancy embed
-            embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) {action.lower() if action.lower() == "add" else "remov"}ed.{f" Associated Discord account <@{result.get("user_id")}> was also {action.lower() if action.lower() == "add" else "remov"}ed." if result.get("user_id") else ""}")
+            # Build description per action to make wording match what happened
+            if action == "Add":
+                description = f"`{mc_username}` (`{result.get("uuid")}`) blacklisted."
+
+                if result.get("user_id"):
+                    description += f" Linked Discord account <@{result.get("user_id")}> was unlinked & removed from the whitelist."
+            else:
+                description = f"`{mc_username}` (`{result.get("uuid")}`) removed from the blacklist."
+
+                if result.get("user_id"):
+                    description += f" The ban was linked to <@{result.get("user_id")}>."
+
+                if result.get("added_by_id"):
+                    description += f" Originally banned by <@{result.get("added_by_id")}>."
+
+            embed = Embeds.success(description)
 
             # Catch incase unable to find avatar of skin from either API
             if result.get("avatar"):
                 embed.set_thumbnail(url=result.get("avatar"))
 
             await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # Clean up the whitelist when a member leaves, is kicked or banned
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        # Only react to guilds that are actually in the config
+        if not any(s.get("guild_id") == member.guild.id for s in config.get("servers") or []):
+            return
+
+        # If they're still a member of another configured guild, their whitelist access stays
+        for server_config in config.get("servers") or []:
+            guild_id = server_config.get("guild_id")
+
+            if guild_id and guild_id != member.guild.id:
+                guild = self.bot.get_guild(guild_id)
+
+                if guild and guild.get_member(member.id):
+                    return
+
+        # Logging & error handling all happen inside unwhitelist_user()
+        await unwhitelist_user(self.bot, member.id, f"left or was removed from \"{member.guild.name}\"")
 
     @tasks.loop(minutes=5)
     async def server_monitor(self):
@@ -102,83 +136,84 @@ class Minecraft(commands.Cog):
 
             results = await check_rcon(task=True)
 
+            # Empty result means every configured server failed validation inside check_rcon()
+            if not results:
+                return
+
             # Check that the result is valid
-            if results:
-                for name, current_state in results.items():
-                    previous_state = self.server_states.get(name)
+            for name, current_state in results.items():
+                previous_state = self.server_states.get(name)
 
-                    # If the state changed and it's not the first run
-                    if previous_state and previous_state != current_state:
-                        # Make names slightly more pretty
-                        pretty_name = "Velocity (proxy)" if name == "velocity" else name.capitalize()
+                # If the state changed and it's not the first run
+                if previous_state and previous_state != current_state:
+                    # Make names slightly more pretty
+                    pretty_name = "Velocity (proxy)" if name == "velocity" else name.capitalize()
 
-                        # Generate Embeds and Logs based on state transition
-                        if current_state:
-                            embed = Embeds.success(f"**{pretty_name}** is back online.")
-                            Logger.info(f"\"{name}\" was detected as online during routine RCON ping.", task=True)
-                        else:
-                            embed = Embeds.warning(f"**{pretty_name}** has gone offline.")
-                            Logger.warning(f"\"{name}\" was detected as offline during routine RCON ping.", task=True)
+                    # Generate Embeds and Logs based on state transition
+                    if current_state:
+                        embed = Embeds.success(f"**{pretty_name}** is back online.")
+                        Logger.info(f"\"{name}\" was detected as online during routine RCON ping.", task=True)
+                    else:
+                        embed = Embeds.warning(f"**{pretty_name}** has gone offline.")
+                        Logger.warning(f"\"{name}\" was detected as offline during routine RCON ping.", task=True)
 
-                        # Broadcast to all Discord servers with an mc_chat channel configured
-                        for server_config in (config.get("servers") or []):
-                            channel_id = (server_config.get("channels") or {}).get("mc_chat")
-
-                            if channel_id:
-                                # Use discord.py cache to avoid spamming API
-                                channel = self.bot.get_channel(channel_id)
-
-                                if channel:
-                                    try:
-                                        await channel.send(embed=embed)
-                                    except Exception:
-                                        Logger.warning(f"\"{name}\" Minecraft server status update could not be sent to channel (ID: {channel_id}).", task=True)
-
-                    # Update the memory state for the next check
-                    self.server_states[name] = current_state
-
-                # Get only velocity status
-                velocity_status = results.get("velocity", False)
-
-                # Calculate how many backend servers exist, except for velocity
-                backend_servers = [state for name, state in results.items() if name != "velocity"]
-
-                # Count server totals
-                online_count = backend_servers.count(True)
-                total_count = len(backend_servers)
-
-                # If velocity is offline / all servers are offline, display as unavailable
-                if not velocity_status or online_count == 0:
-                    new_status = "🔴・Unavailable"
-
-                # If velocity is online & not all servers are online (but at least 1 is)
-                elif online_count < total_count:
-                    new_status = "🟡・Partial Outage"
-
-                # If velocity is online & all servers are online
-                else:
-                    new_status = "🟢・Online"
-
-                # Change VC name if it does NOT match
-                if new_status != self.vc_status:
-                    for server_cfg in (config.get("servers") or []):
-                        channel_id = (server_cfg.get("channels") or {}).get("mc_status")
+                    # Broadcast to all Discord servers with an mc_chat channel configured
+                    for server_config in (config.get("servers") or []):
+                        channel_id = (server_config.get("channels") or {}).get("mc_chat")
 
                         if channel_id:
+                            # Use discord.py cache to avoid spamming API
                             channel = self.bot.get_channel(channel_id)
 
                             if channel:
                                 try:
-                                    # Only rename is the status changes to avoid API spam
-                                    if channel.name != new_status:
-                                        await channel.edit(name=new_status)
+                                    await channel.send(embed=embed)
                                 except Exception:
-                                    Logger.warning(f"Minecraft server VC status update failed for channel (ID: {channel_id}).", task=True)
+                                    Logger.warning(f"\"{name}\" Minecraft server status update could not be sent to channel (ID: {channel_id}).", task=True)
 
-                    # Save the new status to memory
-                    self.vc_status = new_status
+                # Update the memory state for the next check
+                self.server_states[name] = current_state
+
+            # Get only velocity status
+            velocity_status = results.get("velocity", False)
+
+            # Calculate how many backend servers exist, except for velocity
+            backend_servers = [state for name, state in results.items() if name != "velocity"]
+
+            # Count server totals
+            online_count = backend_servers.count(True)
+            total_count = len(backend_servers)
+
+            # If velocity is offline / all servers are offline, display as unavailable
+            if not velocity_status or online_count == 0:
+                new_status = "🔴・Unavailable"
+
+            # If velocity is online & not all servers are online (but at least 1 is)
+            elif online_count < total_count:
+                new_status = "🟡・Partial Outage"
+
+            # If velocity is online & all servers are online
             else:
-                Logger.warning("Detected result is missing from check_rcon() function. Ignoring this run.", task=True)
+                new_status = "🟢・Online"
+
+            # Change VC name if it does NOT match
+            if new_status != self.vc_status:
+                for server_cfg in (config.get("servers") or []):
+                    channel_id = (server_cfg.get("channels") or {}).get("mc_status")
+
+                    if channel_id:
+                        channel = self.bot.get_channel(channel_id)
+
+                        if channel:
+                            try:
+                                # Only rename is the status changes to avoid API spam
+                                if channel.name != new_status:
+                                    await channel.edit(name=new_status)
+                            except Exception:
+                                Logger.warning(f"Minecraft server VC status update failed for channel (ID: {channel_id}).", task=True)
+
+                # Save the new status to memory
+                self.vc_status = new_status
         except Exception as e:
             Logger.warning("A critical error occurred whilst running the Minecraft server monitor task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
