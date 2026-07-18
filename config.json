@@ -9,7 +9,7 @@
         },
         "ssh": [
             {
-                "host": "rouabix.no7here.net",
+                "host": "roubaix.no7here.net",
                 "username": "no7here",
                 "key": "ENV_ROUBAIX_SSH_KEY"
             }

@@ -55,7 +55,7 @@ class Minecraft(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="blacklist", description="Add or remove an account from the Minecraft server blacklist.")
-    @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the whitelist.", reason="")
+    @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the blacklist.", reason="Why you're taking this action.")
     @app_commands.rename(mc_username="username")
     async def blacklist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str, reason: str):
         # Require command to be in a server

@@ -248,7 +248,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
             response = await _send_velocity_command(f"whitelist remove {mc_username}")
 
             # Catch if response errored out
-            if "removed player" not in response.lower() and "not in whitelist" not in response.lower():
+            if "removed player" not in response.lower() and "is not in the whitelist" not in response.lower():
                 Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute whitelist remove command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) so it can be added to blacklist.")
 
                 return {
@@ -454,9 +454,9 @@ async def _fetch_mc_uuid(mc_username: str) -> str:
             async with session.get(f"https://api.mojang.com/users/profiles/minecraft/{mc_username}", timeout=aiohttp.ClientTimeout(total=2)) as response:
                 if response.status == 200:
                     data = await response.json()
+                    # Would be extremely weird for ID to be missing, but it is caught here anyway.
                     return data.get("id", "unknown")
-                Logger.warning(f"Failed to fetch UUID for Minecraft username \"{mc_username}\" as response was not \"OK\" (Status: {response.status}).")
-                return "failed"
+                return "unknown"
         except Exception:
             Logger.warning(f"Failed to fetch UUID for Minecraft username \"{mc_username}\".")
             return "failed"

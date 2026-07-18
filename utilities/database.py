@@ -65,6 +65,7 @@ async def init_db():
             user=db_username,
             db=db_name,
             autocommit=True,
+            pool_recycle=3600,
             # Add password attribute if it is set
             **({"password": os.environ.get(env_key)} if (env_key and os.environ.get(env_key)) else {})
         )
