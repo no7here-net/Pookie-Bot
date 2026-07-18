@@ -10,7 +10,6 @@
 import discord
 import asyncio
 import json
-import os
 
 from utilities.output import Logger
 

@@ -1,4 +1,3 @@
-import asyncio
 import discord
 
 from typing import Literal
@@ -22,8 +21,6 @@ class Minecraft(commands.Cog):
 
     def cog_unload(self):
         self.server_monitor.cancel()
-
-    # TO DO: MERGE WHITELIST & UNLINK
 
     @app_commands.command(name="whitelist", description="Add or remove an account from the Minecraft server whitelist.")
     @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the whitelist.")

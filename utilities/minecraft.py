@@ -123,7 +123,7 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
                     "error": "Failed to reach Mojang's API for account information."
                 }
 
-            Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from whitelisting to the Minecraft account \"{linked_mc_username}\" (UUID: {linked_mc_uuid}) as it is already linked.")
+            Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from whitelisting the account \"{mc_username}\" (UUID: {mc_uuid}) as the Minecraft account \"{linked_mc_username}\" (UUID: {linked_mc_uuid}) as it is already linked.")
 
             return {
                 "success": False,
