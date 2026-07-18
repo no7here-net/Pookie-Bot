@@ -8,7 +8,7 @@ from discord.ext import commands, tasks
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import config, is_admin
-from utilities.minecraft import whitelist_logic, unlink_logic, blacklist_logic, check_rcon
+from utilities.minecraft import whitelist_logic, blacklist_logic, check_rcon
 
 class Minecraft(commands.Cog):
     def __init__(self, bot):
@@ -23,15 +23,17 @@ class Minecraft(commands.Cog):
     def cog_unload(self):
         self.server_monitor.cancel()
 
-    @app_commands.command(name="whitelist", description="Whitelist an account to the Minecraft server")
-    @app_commands.describe(mc_username="Minecraft username to whitelist.")
+    # TO DO: MERGE WHITELIST & UNLINK
+
+    @app_commands.command(name="whitelist", description="Add or remove an account from the Minecraft server whitelist.")
+    @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the whitelist.")
     @app_commands.rename(mc_username="username")
-    async def whitelist(self, interaction: discord.Interaction, mc_username: str):
+    async def whitelist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str):
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
         # Send info to logic
-        result = await whitelist_logic(self.bot, interaction.user.id, mc_username)
+        result = await whitelist_logic(self.bot, action, interaction.user.id, mc_username)
 
         if not result.get("success"):
             # Error message already ends with a full stop
@@ -41,7 +43,10 @@ class Minecraft(commands.Cog):
             return
 
         # If successful, create fancy embed
-        embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) linked & whitelisted.")
+        if action == "Add":
+            embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) linked & whitelisted.")
+        else:
+            embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) has been unlinked & removed from the whitelist.")
 
         # Catch incase unable to find avatar of skin from either API
         if result.get("avatar"):
@@ -49,35 +54,10 @@ class Minecraft(commands.Cog):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="unlink", description="Unlink your account from the Minecraft server")
-    @app_commands.describe(mc_username="Minecraft username to unlink.")
+    @app_commands.command(name="blacklist", description="Add or remove an account from the Minecraft server blacklist.")
+    @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the whitelist.", reason="")
     @app_commands.rename(mc_username="username")
-    async def unlink(self, interaction: discord.Interaction, mc_username: str):
-        # Prevent Discord timing out
-        await interaction.response.defer(ephemeral=True)
-
-        # Send info to logic
-        result = await unlink_logic(self.bot, interaction.user.id, mc_username)
-
-        if not result.get("success"):
-            # Error message already ends with a full stop
-            embed = Embeds.error(result.get("error"))
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        # If successful, create fancy embed
-        embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) has been unlinked and removed from the whitelist.")
-
-        # Catch incase unable to find avatar of skin from either API
-        if result.get("avatar"):
-            embed.set_thumbnail(url=result.get("avatar"))
-
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="blacklist", description="Bans an account from the Minecraft server")
-    @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to ban or unban the account.", reason="")
-    @app_commands.rename(mc_username="username")
-    async def blacklist(self, interaction: discord.Interaction, action: Literal["Ban", "Unban"], mc_username: str, reason: str):
+    async def blacklist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str, reason: str):
         # Require command to be in a server
         if not interaction.guild:
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} the Minecraft account \"{mc_username}\" for the reason \"{reason}\" but was blocked because the action was taken in DMs.")
@@ -112,7 +92,6 @@ class Minecraft(commands.Cog):
                 embed.set_thumbnail(url=result.get("avatar"))
 
             await interaction.followup.send(embed=embed, ephemeral=True)
-
 
     @tasks.loop(minutes=5)
     async def server_monitor(self):
