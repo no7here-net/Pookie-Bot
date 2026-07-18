@@ -45,6 +45,60 @@ async def add_preverify(client: discord.Client, guild_id: int, user_id: int, add
                     "error": "Unknown error occurred whilst interacting with the database."
                 }
 
+# Remove a user from the pre-verified list
+async def remove_preverify(client: discord.Client, guild_id: int, user_id: int, removed_by_id: int) -> dict:
+    # Fetch usernames through their ID for logger
+    target_username = await fetch_username(client, user_id)
+    removed_by_username = await fetch_username(client, removed_by_id)
+
+    async with db.conn_pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            try:
+                await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild_id,))
+
+                # A rowcount of 0 means there was nothing to delete
+                if cur.rowcount == 0:
+                    Logger.warning(f"\"{removed_by_username}\" (ID: {removed_by_id}) failed to remove pre-verification for \"{target_username}\" (ID: {user_id}) as they are not in the pre_verified table.")
+
+                    return {
+                        "success": False,
+                        "error": "This user is not pre-verified."
+                    }
+
+                Logger.info(f"\"{removed_by_username}\" (ID: {removed_by_id}) removed pre-verification for \"{target_username}\" (ID: {user_id}).")
+
+                return {
+                    "success": True,
+                    "error": None
+                }
+            except Exception as e:
+                Logger.error(f"\"{removed_by_username}\" (ID: {removed_by_id}) failed to remove pre-verification for \"{target_username}\" (ID: {user_id}) due to database failure. Check log.", str(e))
+
+                return {
+                    "success": False,
+                    "error": "Unknown error occurred whilst interacting with the database."
+                }
+
+# Fetch all pre-verified users for a guild, oldest first
+async def list_preverify(guild_id: int) -> dict:
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("SELECT user_id, added_by_id, added_at FROM pre_verified WHERE guild_id = %s ORDER BY added_at ASC", (guild_id,))
+                entries = await cur.fetchall()
+
+        return {
+            "success": True,
+            "entries": entries
+        }
+    except Exception as e:
+        Logger.error(f"Failed to fetch the pre-verified list for server (ID: {guild_id}). Check log.", str(e))
+
+        return {
+            "success": False,
+            "error": "Unknown error occurred whilst interacting with the database."
+        }
+
 # Non-pre-verified user verification
 async def verify_member(member: discord.Member) -> bool:
     # Find verified role and remove them from pending
