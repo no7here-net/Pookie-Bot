@@ -85,7 +85,7 @@ class Minecraft(commands.Cog):
                 return
 
             # If successful, create fancy embed
-            embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) {action.lower()}ned.{f" Associated Discord account <@{result.get("user_id")}> was also {action.lower()}ned." if result.get("user_id") else ""}")
+            embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) {action.lower() if action.lower() == "add" else "remov"}ed.{f" Associated Discord account <@{result.get("user_id")}> was also {action.lower() if action.lower() == "add" else "remov"}ed." if result.get("user_id") else ""}")
 
             # Catch incase unable to find avatar of skin from either API
             if result.get("avatar"):
