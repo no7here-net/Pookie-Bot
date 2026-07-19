@@ -488,8 +488,6 @@ async def _get_http_session() -> aiohttp.ClientSession:
 
 # Closes the shared HTTP session. Called by the bot's close() on shutdown.
 async def close_http_session():
-    global _http_session
-
     if _http_session is not None and not _http_session.closed:
         await _http_session.close()
 
