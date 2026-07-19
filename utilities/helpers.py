@@ -22,8 +22,6 @@ config = load_config()
 
 # Add a function to reload config
 def reload_config():
-    # Import global config variable
-    global config
     try:
         # Load the new config into a temporary variable first
         new_config = load_config()
