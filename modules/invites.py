@@ -22,15 +22,9 @@ class Invites(commands.Cog):
         self.verify_sweeper.cancel()
 
     @app_commands.command(name="preverify", description="Manage automatic member verification on member join.")
+    @app_commands.guild_only() # Hides command from DMs
     @app_commands.describe(action="Whether to add, remove, or list pre-verified users.", user="User to target. Required for Add and Remove.")
     async def preverify(self, interaction: discord.Interaction, action: Literal["Add", "Remove", "List"], user: discord.User = None):
-        # Require command to be in a server, as pre-verification is tracked per-server
-        if not interaction.guild:
-            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to use preverify but was blocked because the action was taken in DMs.")
-            embed = Embeds.error("This action is only supported in servers.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
         # Add & remove target a specific user, so one must be provided
         if action in ("Add", "Remove") and user is None:
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} a pre-verification without providing a user.")
@@ -90,14 +84,143 @@ class Invites(commands.Cog):
             embed = Embeds.info("\n".join(lines))
             await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @commands.Cog.listeners()
+    async def on_member_join(self, member: discord.Member):
+        # Prevents bots being put through this automated system - they go through a different permission flow via oauth limited to admins, they don't need checking
+        if member.bot:
+            Logger.info(f"\"{member.name}#{member.discriminator}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) as a bot, skipping gatekeeper.")
+            return
+
+        # Match server in config
+        server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == member.guild.id), {}) or {}
+
+        if not server_config:
+            Logger.warning(f"\"{member.name}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) but the server is not in config.json, skipping gatekeeper.")
+            return
+
+        # Fetch pre-verification state & any leftover pending message from a previous join
+        join_state = await fetch_join_state(member.guild.id, member.id)
+
+        if not join_state.get("success"):
+            # Fail towards the gatekeeper: treat them as a normal joiner rather than letting them through
+            Logger.warning(f"\"{member.name}\" (ID: {member.id}) could not be checked against the pre-verified list due to a database exception. Falling back to standard verification.")
+
+        old_message_id = join_state.get("pending_message_id")
+
+        # Find the joins channel
+        channel = await self._get_joins_channel(member.guild, server_config)
+
+        if not channel:
+            Logger.error(f"\"{member.name}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) but the joins channel could not be found. The gatekeeper timer still applies, so they must be verified manually via role grant.")
+
+        # Pre-verified members skip the gate entirely
+        if join_state.get("preverified_by_id"):
+            # verify_member() handles role granting, database cleanup and its own logging
+            if await verify_member(member):
+                await self._announce_preverify(channel, member.id, join_state.get("preverified_by_id"), old_message_id)
+                return
+
+            # If granting the role fails, fall through to the standard flow so they are at least visible & pending
+            Logger.warning(f"\"{member.name}\" (ID: {member.id}) is pre-verified but could not be verified on join. Falling back to standard verification.")
+
+        # Standard flow: post the gatekeeper message with verification buttons
+        message_id = 0
+        message = None
+
+        if channel:
+            embed = Embeds.info(f"<@{member.id}> joined and is awaiting verification. Their account was created <t:{int(member.created_at.timestamp())}:R>. They will be banned <t:{int(time.time() + 86400)}:R> unless verified.")
+
+            try:
+                message = await channel.send(embed=embed, view=VerificationView())
+                message_id = message.id
+            except Exception:
+                Logger.warning(f"\"{member.name}\" (ID: {member.id}) joined but the verification message could not be sent to the joins channel (ID: {channel.id}).")
+
+        # Track them even if no message could be sent, so the 24 hour timer still applies. As message_id of 0 can never match a real message, so the buttons & sweeper edit safely don't
+        if not await register_pending(member.guild.id, member.id, message_id):
+            Logger.error(f"\"{member.name}\" (ID: {member.id}) joined but could not be added to pending verifications. The gatekeeper cannot track them. Manual verification or removal required.")
+
+            # Disarm the buttons, as they cannot work without a database entry
+            if message:
+                try:
+                    embed = Embeds.error(f"<@{member.id}> joined but couldn't be tracked due to a database error. Manual verification or removal required.")
+                    await message.edit(embed=embed, view=None)
+                except Exception:
+                    Logger.warning(f"\"{member.name}\" (ID: {member.id})'s join message could not be updated to reflect the tracking failure (Message ID: {message_id}).")
+            return
+
+        # Retire the previous join message if they rejoined whilst still pending, so only the newest buttons are live
+        if old_message_id and channel:
+            try:
+                old_message = await channel.fetch_message(old_message_id)
+                embed = Embeds.info(f"<@{member.id}> rejoined before being verified. Verification moved to a newer message.")
+                await old_message.edit(embed=embed, view=None)
+            except Exception:
+                Logger.warning(f"\"{member.name}\" (ID: {member.id}) rejoined but their previous join message could not be updated (Message ID: {old_message_id}).")
+
+        Logger.info(f"\"{member.name}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) and is pending verification.")
+
     # Run every hour to catch users who didn't get verified in 24h
     @tasks.loop(hours=1)
     async def verify_sweeper(self):
         try:
+            # =============================
+            # PHASE 1: PRE-VERIFY CATCH-UP
+            # =============================
+
+            for server_config in config.get("servers") or []:
+                guild_id = server_config.get("guild_id")
+                guild = self.bot.get_guild(guild_id) if guild_id else None
+
+                if not guild:
+                    continue
+
+                # Make sure the member cache is complete, otherwise present members could be missed this run
+                if not guild.chunked:
+                    try:
+                        await guild.chunk()
+                    except Exception:
+                        Logger.warning(f"Failed to fetch the full member list for \"{guild.name}\" (ID: {guild.id}). Pre-verification catch-up may be incomplete this run.", task=True)
+
+                try:
+                    async with db.conn_pool.acquire() as conn:
+                        async with conn.cursor() as cur:
+                            await cur.execute("SELECT user_id, added_by_id FROM pre_verified WHERE guild_id = %s", (guild_id,))
+                            preverified_users = await cur.fetchall()
+                except Exception:
+                    Logger.warning("Verification sweeper failed to fetch the pre-verified list from the database.", task=True)
+                    preverified_users = ()
+
+                for user_id, added_by_id in preverified_users:
+                    member = guild.get_member(user_id)
+
+                    # Not in the server yet - on_member_join() will verify them when they arrive
+                    if not member:
+                        continue
+
+                    # Fetch any pending join message before verify_member() deletes the row
+                    join_state = await fetch_join_state(guild_id, user_id)
+                    old_message_id = join_state.get("pending_message_id")
+
+                    if await verify_member(member, task=True):
+                        Logger.info(f"\"{member.name}\" (ID: {member.id}) was caught by the pre-verification sweep and verified.", task=True)
+
+                        channel = await self._get_joins_channel(guild, server_config)
+                        await self._announce_preverify(channel, member.id, added_by_id, old_message_id, task=True)
+
+            # ==================
+            # PHASE 2: BAN SWEEP
+            # ==================
+
             async with db.conn_pool.acquire() as conn:
                 async with conn.cursor() as cur:
-                    # Fetch everyone whose join_time was more than 24 hours ago
-                    await cur.execute("SELECT user_id, guild_id, message_id FROM pending_verifications WHERE join_time < NOW() - INTERVAL 24 HOUR")
+                    # Fetch everyone whose join_time was more than 24 hours ago, excluding anyone in pre-verified table
+                    await cur.execute("""
+                        SELECT pv.user_id, pv.guild_id, pv.message_id
+                        FROM pending_verifications pv
+                        LEFT JOIN pre_verified p ON p.user_id = pv.user_id AND p.guild_id = pv.guild_id
+                        WHERE pv.join_time < NOW() - INTERVAL 24 HOUR AND p.user_id IS NULL
+                    """)
                     expired_users = await cur.fetchall()
 
             # Loop through all the expired users and ban
@@ -186,6 +309,44 @@ class Invites(commands.Cog):
     @verify_sweeper.before_loop
     async def before_verify_sweeper(self):
         await self.bot.wait_until_ready()
+
+    # ================
+    # INTERNAL HELPERS
+    # ================
+
+    # Resolves the joins channel for a server config, preferring the cache with an API fallback
+    async def _get_joins_channel(self, guild: discord.Guild, server_config: dict):
+        channel_id = (server_config.get("channels") or {}).get("joins")
+
+        if not channel_id:
+            return None
+
+        channel = self.bot.get_channel(channel_id)
+
+        if channel:
+            return channel
+
+        try:
+            return await guild.fetch_channel(channel_id)
+        except Exception:
+            return None
+
+    # Announces a pre-verification in the joins channel. Retires the user's old join message if one exists so stale buttons never linger.
+    async def _announce_preverify(self, channel, user_id: int, added_by_id: int, old_message_id: int = None, task: bool = False):
+        if not channel:
+            return
+
+        embed = Embeds.info(f"<@{user_id}> joined and was pre-verified by <@{added_by_id}>.")
+
+        try:
+            if old_message_id:
+                old_message = await channel.fetch_message(old_message_id)
+                await old_message.edit(embed=embed, view=None)
+            else:
+                await channel.send(embed=embed)
+        except Exception:
+            Logger.warning(f"Pre-verification for user (ID: {user_id}) could not be announced in the joins channel (ID: {channel.id}).", task=task)
+
 
 async def setup(bot):
     await bot.add_cog(Invites(bot))
