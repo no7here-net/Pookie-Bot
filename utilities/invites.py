@@ -99,8 +99,48 @@ async def list_preverify(guild_id: int) -> dict:
             "error": "Unknown error occurred whilst interacting with the database."
         }
 
+# Verifies join state for a user in one trip
+async def fetch_join_state(guild_id: int, user_id: int) -> dict:
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("""
+                    SELECT
+                        (SELECT added_by_id FROM pre_verified WHERE user_id = %s AND guild_id = %s LIMIT 1),
+                        (SELECT message_id FROM pending_verifications WHERE user_id = %s AND guild_id = %s LIMIT 1)
+                """, (user_id, guild_id, user_id, guild_id,))
+                result = await cur.fetchone()
+
+                # Contains information to resolve whether a user was pre-verified (and by who) and any pending verification message left over from a previous join
+                return {
+                    "success": True,
+                    "preverified_by_id": result[0],
+                    "pending_message_id": result[1]
+                }
+    except Exception as e:
+        Logger.error(f"Failed to fetch join state for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
+
+        return { "success": False }
+
+# Registers a pending verification for a user, refreshing existing entry if they rejoined whilst still pending so the 24h timer restarts and the buttons on the newest join message become the live one
+async def register_pending(guild_id: int, user_id: int, message_id: int) -> bool:
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                # Upsert on the (user_id, guild_id) primary key
+                await cur.execute("""
+                    INSERT INTO pending_verifications (user_id, guild_id, message_id)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE message_id = VALUES(message_id), join_time = CURRENT_TIMESTAMP
+                """, (user_id, guild_id, message_id,))
+        return True
+    except Exception as e:
+        Logger.error(f"Failed to register pending verification for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
+
+        return False
+
 # Non-pre-verified user verification
-async def verify_member(member: discord.Member) -> bool:
+async def verify_member(member: discord.Member, task: bool = False) -> bool:
     # Find verified role and remove them from pending
     server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == member.guild.id), {}) or {}
 
