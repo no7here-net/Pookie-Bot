@@ -82,18 +82,14 @@ class Minecraft(commands.Cog):
 
             # Build description per action to make wording match what happened
             if action == "Add":
-                description = f"`{mc_username}` (`{result.get("uuid")}`) blacklisted."
+                discord_link = f" Linked Discord account <@{result.get('user_id')}> was unlinked & removed from the whitelist." if result.get("user_id") else ""
 
-                if result.get("user_id"):
-                    description += f" Linked Discord account <@{result.get("user_id")}> was unlinked & removed from the whitelist."
+                description = f"`{mc_username}` (`{result.get('uuid')}`) blacklisted.{discord_link}"
             else:
-                description = f"`{mc_username}` (`{result.get("uuid")}`) removed from the blacklist."
+                discord_link = f" The ban was linked to <@{result.get('user_id')}>." if result.get("user_id") else ""
+                banned_by = f" Originally banned by <@{result.get('added_by_id')}>." if result.get("added_by_id") else ""
 
-                if result.get("user_id"):
-                    description += f" The ban was linked to <@{result.get("user_id")}>."
-
-                if result.get("added_by_id"):
-                    description += f" Originally banned by <@{result.get("added_by_id")}>."
+                description = f"`{mc_username}` (`{result.get('uuid')}`) removed from the blacklist.{discord_link}{banned_by}"
 
             embed = Embeds.success(description)
 
