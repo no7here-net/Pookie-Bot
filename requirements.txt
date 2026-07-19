@@ -1,0 +1,4 @@
+discord.py>=2.7.1
+aiomysql>=0.2.0
+aiohttp>=3.7.4
+mcrcon>=0.7.0
