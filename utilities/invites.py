@@ -123,7 +123,7 @@ async def register_pending(guild_id: int, user_id: int, message_id: int) -> bool
 # Non-pre-verified user verification
 async def verify_member(member: discord.Member, task: bool = False) -> bool:
     # Find verified role and remove them from pending
-    server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == member.guild.id), {}) or {}
+    server_config = get_guild_config(member.guild.id)
 
     username = member.name
     user_id = member.id
