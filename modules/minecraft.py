@@ -4,6 +4,8 @@ from typing import Literal
 from discord import app_commands
 from discord.ext import commands, tasks
 
+import utilities.database as db
+
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import config, is_admin
@@ -26,7 +28,6 @@ class Minecraft(commands.Cog):
         self.whitelist_sweeper.cancel()
 
     @app_commands.command(name="whitelist", description="Add or remove an account from the Minecraft server whitelist.")
-    @app_commands.guild_only() # Hides command from DMs
     @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the whitelist.")
     @app_commands.rename(mc_username="username")
     async def whitelist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str):
@@ -56,7 +57,6 @@ class Minecraft(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="blacklist", description="Add or remove an account from the Minecraft server blacklist.")
-    @app_commands.guild_only() # Hides command from DMs
     @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the blacklist.", reason="Why you're taking this action.")
     @app_commands.rename(mc_username="username")
     async def blacklist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str, reason: str):
