@@ -47,6 +47,10 @@ class PookieBot(commands.Bot):
                 except Exception as e:
                     Logger.error(f"Failed to load \"{module_name}\". Check log.", str(e))
 
+        # Register every command as guild only so they don't show up in DMs
+        for command in self.tree.walk_commands():
+            command.guild_only = True
+
         # Sync bot commands to Discord
         try:
             synced = await self.tree.sync()
