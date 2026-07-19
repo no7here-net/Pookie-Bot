@@ -82,7 +82,7 @@ class Invites(commands.Cog):
             return
 
         # Match server in config
-        server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == member.guild.id), {}) or {}
+        server_config = get_guild_config(member.guild.id)
 
         if not server_config:
             Logger.warning(f"\"{member.name}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) but the server is not in config.json, skipping gatekeeper.")
@@ -223,7 +223,7 @@ class Invites(commands.Cog):
                 guild = self.bot.get_guild(guild_id)
 
                 # Safely navigate the nested dictionaries
-                server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == guild_id), {}) or {}
+                server_config = get_guild_config(guild_id)
 
                 if guild:
                     # Handle manual verification
