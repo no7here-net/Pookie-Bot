@@ -110,14 +110,15 @@ async def check_host() -> dict:
 # PERMISSION CHECKER
 # ==================
 
+# Globally forces all commands to pass all conditions for each interaction
 async def is_verified(interaction: discord.Interaction) -> bool:
+    # Block DMs
+    if not interaction.guild:
+        return False
+
     # Bot admin bypass
     if interaction.user.id in (config.get("admins") or []):
         return True
-
-    # Block DMs (prevents crashes on next part)
-    if not interaction.guild:
-        return False
 
     # Match server in config
     server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == interaction.guild.id), {}) or {}
