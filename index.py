@@ -8,6 +8,7 @@ from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import config, is_verified
 from utilities.interactions import VerificationView
+from utilities.minecraft import close_http_session
 
 import utilities.database as db
 
