@@ -1,3 +1,4 @@
+import time
 import discord
 
 from typing import Literal
@@ -9,7 +10,8 @@ import utilities.database as db
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import config, fetch_username
-from utilities.invites import ban_user, add_preverify, remove_preverify, list_preverify
+from utilities.interactions import VerificationView
+from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending
 
 class Invites(commands.Cog):
     def __init__(self, bot):
@@ -22,7 +24,6 @@ class Invites(commands.Cog):
         self.verify_sweeper.cancel()
 
     @app_commands.command(name="preverify", description="Manage automatic member verification on member join.")
-    @app_commands.guild_only() # Hides command from DMs
     @app_commands.describe(action="Whether to add, remove, or list pre-verified users.", user="User to target. Required for Add and Remove.")
     async def preverify(self, interaction: discord.Interaction, action: Literal["Add", "Remove", "List"], user: discord.User = None):
         # Add & remove target a specific user, so one must be provided
@@ -35,33 +36,22 @@ class Invites(commands.Cog):
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
-        if action == "Add":
+        # Add & remove logic are handled by a single logic function
+        if action in ("Add", "Remove"):
             # Send info to logic
-            result = await add_preverify(self.bot, interaction.guild.id, user.id, interaction.user.id)
+            result = await preverify_logic(self.bot, action, interaction.guild.id, user.id, interaction.user.id)
 
             if not result.get("success"):
                 # Error message already ends with a full stop
                 embed = Embeds.error(result.get("error"))
             else:
-                embed = Embeds.success(f"<@{user.id}> will bypass verification when they join.")
-
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-        elif action == "Remove":
-            # Send info to logic
-            result = await remove_preverify(self.bot, interaction.guild.id, user.id, interaction.user.id)
-
-            if not result.get("success"):
-                # Error message already ends with a full stop
-                embed = Embeds.error(result.get("error"))
-            else:
-                embed = Embeds.success(f"<@{user.id}> will no longer bypass verification.")
+                embed = Embeds.success(f"<@{user.id}> will {"no longer " if action == "Remove" else ""}bypass verification when they join.")
 
             await interaction.followup.send(embed=embed, ephemeral=True)
 
         elif action == "List":
             # Fetch all entries for this server
-            result = await list_preverify(interaction.guild.id)
+            result = await preverify_list(interaction.guild.id)
 
             if not result.get("success"):
                 embed = Embeds.error(result.get("error"))
@@ -84,7 +74,7 @@ class Invites(commands.Cog):
             embed = Embeds.info("\n".join(lines))
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @commands.Cog.listeners()
+    @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         # Prevents bots being put through this automated system - they go through a different permission flow via oauth limited to admins, they don't need checking
         if member.bot:
