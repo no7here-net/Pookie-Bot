@@ -28,7 +28,7 @@ class VerificationView(discord.ui.View):
     )
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Grab verified role ID from config and check if the user has a role matching that ID
-        server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == interaction.guild.id), {}) or {}
+        server_config = get_guild_config(interaction.guild.id)
         verified_role_id = (server_config.get("roles") or {}).get("verified")
 
         # Block if they aren't verified or a bot admin
