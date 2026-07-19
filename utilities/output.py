@@ -7,7 +7,6 @@
 
 import threading
 import datetime
-import asyncio
 import atexit
 import queue
 import os
