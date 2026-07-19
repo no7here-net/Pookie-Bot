@@ -42,6 +42,11 @@ def reload_config():
         Logger.error("Failed to reload config.json. The previous config has been kept until reboot. Check log.", str(e))
         return False
 
+# =================
+# SCRIPT LEVEL DEFS
+# =================
+customisation = config.get("customisation") or {}
+
 # ===============
 # COMMAND HELPERS
 # ===============
@@ -52,16 +57,18 @@ def is_admin(user_id: int) -> bool:
 
 # Fetch emoji ID by name
 def get_emoji(name: str) -> str:
-    customisation = config.get("customisation") or {}
     emojis = customisation.get("emojis") or {}
     return emojis.get(name)
 
 # Fetch HEX colours and convert to integers for discord.py
 def get_colour(name: str) -> int:
-    customisation = config.get("customisation") or {}
     colours = customisation.get("colours") or {}
     value = colours.get(name)
     return int(value if value else "2fbffd", 16)
+
+# Fetch server configs
+def get_guild_config(guild_id: int) -> dict:
+    return next((s for s in config.get("servers") or [] if s.get("guild_id") == guild_id), {}) or {}
 
 # Fetch username by using their Discord ID (useful for when someone has left server for example)
 async def fetch_username(client: discord.Client, user_id: int) -> str:
@@ -119,7 +126,7 @@ async def is_verified(interaction: discord.Interaction) -> bool:
         return True
 
     # Match server in config
-    server_config = next((s for s in config.get("servers") or [] if s.get("guild_id") == interaction.guild.id), {}) or {}
+    server_config = get_guild_config(interaction.guild.id)
 
     # Handle unknown guilds
     if not server_config:
