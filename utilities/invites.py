@@ -8,71 +8,52 @@ import aiomysql
 import discord
 import uuid
 
+from typing import Literal
+
 import utilities.database as db
 
 from utilities.helpers import config, fetch_username
 from utilities.output import Logger
 
-# Add a user to pre-verified list to bypass the gatekeeper on join
-async def add_preverify(client: discord.Client, guild_id: int, user_id: int, added_by_id: int) -> dict:
+# Add or remove a user from pre-verified list to bypass the gatekeeper on join
+async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove"], guild_id: int, user_id: int, added_by_id: int) -> dict:
     # Fetch usernames through their ID for logger
-    target_username = await fetch_username(client, user_id)
+    username = await fetch_username(client, user_id)
     added_by_username = await fetch_username(client, added_by_id)
 
     async with db.conn_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
-                await cur.execute("INSERT INTO pre_verified (user_id, guild_id, added_by_id) VALUES (%s, %s, %s)", (user_id, guild_id, added_by_id,))
+                if action == "Add":
+                    await cur.execute("INSERT INTO pre_verified (user_id, guild_id, added_by_id) VALUES (%s, %s, %s)", (user_id, guild_id, added_by_id,))
+                else:
+                    await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild_id,))
 
-                Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) pre-verified \"{target_username}\" (ID: {user_id}).")
+                    # A rowcount of 0 means there was nothing to delete
+                    if cur.rowcount == 0:
+                        Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to remove pre-verification for \"{username}\" (ID: {user_id}) as they are not in the pre_verified table.")
+
+                        return {
+                            "success": False,
+                            "error": "This user is not pre-verified."
+                        }
+
+                Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) {"pre-verified" if action == "Add" else "removed pre-verification for"} \"{username}\" (ID: {user_id}).")
 
                 return {
                     "success": True,
                     "error": None
                 }
             except aiomysql.IntegrityError:
-                Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to pre-verify \"{target_username}\" (ID: {user_id}) as they are already in the pre_verified table.")
+                # Only the INSERT can raise this - the primary key means they're already pre-verified
+                Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to pre-verify \"{username}\" (ID: {user_id}) as they are already in the pre_verified table.")
 
                 return {
                     "success": False,
                     "error": "This user is already pre-verified."
                 }
             except Exception as e:
-                Logger.error(f"\"{added_by_username}\" (ID: {added_by_id}) failed to pre-verify \"{target_username}\" (ID: {user_id}) due to database failure. Check log.", str(e))
-
-                return {
-                    "success": False,
-                    "error": "Unknown error occurred whilst interacting with the database."
-                }
-
-# Remove a user from the pre-verified list
-async def remove_preverify(client: discord.Client, guild_id: int, user_id: int, removed_by_id: int) -> dict:
-    # Fetch usernames through their ID for logger
-    target_username = await fetch_username(client, user_id)
-    removed_by_username = await fetch_username(client, removed_by_id)
-
-    async with db.conn_pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            try:
-                await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild_id,))
-
-                # A rowcount of 0 means there was nothing to delete
-                if cur.rowcount == 0:
-                    Logger.warning(f"\"{removed_by_username}\" (ID: {removed_by_id}) failed to remove pre-verification for \"{target_username}\" (ID: {user_id}) as they are not in the pre_verified table.")
-
-                    return {
-                        "success": False,
-                        "error": "This user is not pre-verified."
-                    }
-
-                Logger.info(f"\"{removed_by_username}\" (ID: {removed_by_id}) removed pre-verification for \"{target_username}\" (ID: {user_id}).")
-
-                return {
-                    "success": True,
-                    "error": None
-                }
-            except Exception as e:
-                Logger.error(f"\"{removed_by_username}\" (ID: {removed_by_id}) failed to remove pre-verification for \"{target_username}\" (ID: {user_id}) due to database failure. Check log.", str(e))
+                Logger.error(f"\"{added_by_username}\" (ID: {added_by_id}) failed to {"pre-verify" if action == "Add" else "remove pre-verification for"} \"{username}\" (ID: {user_id}) due to database failure. Check log.", str(e))
 
                 return {
                     "success": False,
@@ -80,7 +61,7 @@ async def remove_preverify(client: discord.Client, guild_id: int, user_id: int, 
                 }
 
 # Fetch all pre-verified users for a guild, oldest first
-async def list_preverify(guild_id: int) -> dict:
+async def preverify_list(guild_id: int) -> dict:
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -149,22 +130,22 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
 
     # If guild not found error
     if not server_config:
-        Logger.warning(f"\"{username}\" (ID: {user_id}) failed verification (server not in config).")
+        Logger.warning(f"\"{username}\" (ID: {user_id}) failed verification as the server was not in the config.", task=task)
         return False
 
     # Find role in guild
     role = member.guild.get_role((server_config.get("roles") or {}).get("verified"))
 
     if not role:
-        Logger.warning(f"\"{username}\" (ID: {user_id}) will not be automatically verified or removed, as verified role cannot be found.")
+        Logger.warning(f"\"{username}\" (ID: {user_id}) will not be automatically verified or removed, as verified role cannot be found.", task=task)
         return False
 
     # Grant role
     try:
         await member.add_roles(role)
-        Logger.info(f"\"{username}\" (ID: {user_id}) was successfully given the verified role.")
+        Logger.info(f"\"{username}\" (ID: {user_id}) was successfully given the verified role.", task=task)
     except Exception:
-        Logger.warning(f"\"{username}\" (ID: {user_id}) could not be given the verified role.")
+        Logger.warning(f"\"{username}\" (ID: {user_id}) could not be given the verified role.", task=task)
         return False
 
     try:
@@ -177,7 +158,7 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
                 await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, member.guild.id,))
     except Exception:
         # Incase database update fails
-        Logger.warning(f"\"{username}\" (ID: {user_id}) received the verified role but database failed to update. Manual correction required.")
+        Logger.warning(f"\"{username}\" (ID: {user_id}) received the verified role but database failed to update. Manual correction required.", task=task)
     return True
 
 # Accept verification logic for verification buttons
