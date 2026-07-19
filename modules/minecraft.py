@@ -7,22 +7,26 @@ from discord.ext import commands, tasks
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import config, is_admin
-from utilities.minecraft import whitelist_logic, blacklist_logic, check_rcon
+from utilities.minecraft import whitelist_logic, blacklist_logic, check_rcon, unwhitelist_user
 
 class Minecraft(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.server_online = True
 
         # Starts server_monitor when cog starts
         self.vc_status = None
         self.server_states = {}
         self.server_monitor.start()
 
+        # Start whitelist reconciliation sweeper when cog starts
+        self.whitelist_sweeper.start()
+
     def cog_unload(self):
         self.server_monitor.cancel()
+        self.whitelist_sweeper.cancel()
 
     @app_commands.command(name="whitelist", description="Add or remove an account from the Minecraft server whitelist.")
+    @app_commands.guild_only() # Hides command from DMs
     @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the whitelist.")
     @app_commands.rename(mc_username="username")
     async def whitelist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str):
@@ -52,15 +56,10 @@ class Minecraft(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="blacklist", description="Add or remove an account from the Minecraft server blacklist.")
+    @app_commands.guild_only() # Hides command from DMs
     @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the blacklist.", reason="Why you're taking this action.")
     @app_commands.rename(mc_username="username")
     async def blacklist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str, reason: str):
-        # Require command to be in a server
-        if not interaction.guild:
-            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} the Minecraft account \"{mc_username}\" for the reason \"{reason}\" but was blocked because the action was taken in DMs.")
-            embed = Embeds.error("This action is only supported in servers.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
         # Require bot admin / user ban perms to run ban action
         if not (interaction.user.guild_permissions.ban_members or is_admin(interaction.user.id)):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} the Minecraft account \"{mc_username}\" for the reason \"{reason}\" but was blocked as they do not have permission.")
@@ -124,6 +123,63 @@ class Minecraft(commands.Cog):
         # Logging & error handling all happen inside unwhitelist_user()
         await unwhitelist_user(self.bot, member.id, f"left or was removed from \"{member.guild.name}\"")
 
+    # Runs immediately on start-up to prevent missed on_member_remove() events from downtime
+    @tasks.loop(hours=1)
+    async def whitelist_sweeper(self):
+        try:
+            guilds = []
+
+            for server_config in config.get("servers") or []:
+                guild_id = server_config.get("guild_id")
+
+                # Catch for malformed configs
+                if not guild_id:
+                    continue
+
+                guild = self.bot.get_guild(guild_id)
+
+                # Prevent false removals if Discord's potato server goes down
+                if not guild or guild.unavailable:
+                    Logger.warning(f"Configured server (ID: {guild_id}) is unavailable. Aborting whitelist sweep this run to prevent false removals.", task=True)
+                    return
+
+                # Attempt to fill cache
+                if not guild.chunked:
+                    try:
+                        await guild.chunk()
+                    except Exception:
+                        Logger.warning(f"Failed to fetch the full member list for \"{guild.name}\" (ID: {guild.id}). Aborting whitelist sweep this run to prevent false removals.", task=True)
+                        return
+
+                guilds.append(guild)
+
+            # With no configured guilds there is nothing to reconcile against
+            if not guilds:
+                return
+
+            # Fetch all linked accounts
+            try:
+                async with db.conn_pool.acquire() as conn:
+                    async with conn.cursor() as cur:
+                        await cur.execute("SELECT user_id FROM mc_accounts")
+                        linked_users = await cur.fetchall()
+            except Exception:
+                Logger.warning("Whitelist sweeper failed to fetch linked accounts from the database.", task=True)
+                return
+
+            for entry in linked_users:
+                user_id = entry[0]
+
+                # Skip anyone still in at least one configured guild
+                if any(guild.get_member(user_id) for guild in guilds):
+                    continue
+
+                # Logging & error handling all happen inside unwhitelist_user()
+                await unwhitelist_user(self.bot, user_id, "no longer in any configured server (offline-gap sweep)", task=True)
+        except Exception as e:
+            Logger.warning("A critical error occurred whilst running the whitelist sweeper task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
+
+    # Continuously monitors Minecraft servers / proxy if populated
     @tasks.loop(minutes=5)
     async def server_monitor(self):
         try:
@@ -220,6 +276,11 @@ class Minecraft(commands.Cog):
     # Ensure bot & cache is ready first before task starts
     @server_monitor.before_loop
     async def before_server_monitor(self):
+        await self.bot.wait_until_ready()
+
+    # Ensure bot & cache is ready first before task starts
+    @whitelist_sweeper.before_loop
+    async def before_whitelist_sweeper(self):
         await self.bot.wait_until_ready()
 
 async def setup(bot):
