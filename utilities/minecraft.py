@@ -166,26 +166,51 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
                     "error": "Your Discord account is not linked to this Minecraft account."
                 }
 
-        # Checks passed, so send command to server
-        if not await _execute_list_command("whitelist", action, mc_username):
-            Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist {action.lower()} command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
-
-            return {
-                "success": False,
-                "error": "Failed to execute whitelist command on the server."
-            }
-
-        # Update the database
+        # Checks passed, so update the database and send command to server
         try:
             async with db.conn_pool.acquire() as conn:
                 async with conn.cursor() as cur:
+                    await conn.begin()
+
                     if action == "Add":
                         await cur.execute("INSERT INTO mc_accounts (user_id, mc_uuid) VALUES (%s, %s)", (user_id, mc_uuid,))
                     elif action == "Remove":
                         await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s AND mc_uuid = %s", (user_id, mc_uuid,))
-        except Exception:
-            # Intended behaviour: still returns success to the user, this warning is the flag for a manual database fix
-            Logger.warning(f"\"{username}\" (ID: {user_id}) passed whitelist logic and has been {"added to" if action == "Add" else "removed from"} the whitelist, but an error occurred when updating the database.")
+
+                    # Queries successful, send RCON command
+                    if not await _execute_list_command("whitelist", action, mc_username):
+                        Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist {action.lower()} command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+                        await conn.rollback()
+
+                        return {
+                            "success": False,
+                            "error": "Failed to execute whitelist command on the server."
+                        }
+
+                    # RCON successful, commit DB
+                    try:
+                        await conn.commit()
+                    except Exception:
+                        await conn.rollback()
+
+                        # Very rare: RCON succeeded, but DB failed to commit. Attempt reverse RCON.
+                        reverse_action = "Remove" if action == "Add" else "Add"
+                        await _execute_list_command("whitelist", reverse_action, mc_username)
+
+                        Logger.error(f"\"{username}\" (ID: {user_id}) passed whitelist logic and RCON command succeeded, but the database failed to commit. A rollback RCON command was sent.")
+                        return {
+                            "success": False,
+                            "error": "An internal database error occurred while saving. Please try again."
+                        }
+
+        except Exception as e:
+            # Database query (execute) failed
+            Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from modifying the whitelist due to a database error: {e}")
+
+            return {
+                "success": False,
+                "error": "An internal database error occurred while modifying the whitelist."
+            }
 
     # Fetch the avatar associated with the username
     mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
@@ -250,16 +275,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
             else:
                 user_id = db_state.get("mc_linked_user_id")
                 username = await fetch_username(client, user_id)
-
-                # Checks passed, so send command to server
-                if not await _execute_list_command("whitelist", "Remove", mc_username, allow_missing=True):
-                    Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute whitelist remove command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) so it can be added to blacklist.")
-
-                    return {
-                        "success": False,
-                        "error": "Failed to execute whitelist removal command on the server."
-                    }
-                # Whitelist removal succeeded, remember in case later step fails
+                # Remove from the whitelist via RCON after the blacklist succeeds
                 removed_from_whitelist = True
 
         if not db_state.get("mc_ban_reason") and action == "Remove":
@@ -270,131 +286,81 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                 "error": "This Minecraft account is not blacklisted."
             }
 
-        # Checks passed, so send command to server
-        if not await _execute_list_command("blacklist", action, mc_username):
-            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute blacklist {action.lower()} command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+        try:
+            async with db.conn_pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await conn.begin()
 
-            if removed_from_whitelist:
-                if await _execute_list_command("whitelist", "Add", mc_username):
-                    Logger.info(f"\"{mc_username}\" (UUID: {mc_uuid}) was restored to the whitelist after the blacklist command failed.")
+                    if action == "Add":
+                        if user_id:
+                            # Delete existing connected account from database
+                            await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s AND mc_uuid = %s", (user_id, mc_uuid,))
 
-                    return {
-                        "success": False,
-                        "error": "Failed to execute blacklist command on the server. The whitelist removal was rolled back."
-                    }
-                Logger.error(f"\"{mc_username}\" (UUID: {mc_uuid}) could not be restored to the whitelist after the blacklist command failed. Manual server-side correction required.")
+                            # Add MC account to ban database and link with its Discord account
+                            await cur.execute("INSERT INTO mc_bans (mc_uuid, user_id, added_by_id, reason) VALUES (%s, %s, %s, %s)", (mc_uuid, user_id, added_by_id, reason,))
 
-                return {
-                    "success": False,
-                    "error": "Failed to execute blacklist command AND failed to restore the whitelist. Manual correction required."
-                }
+                            # Add to mod log
+                            await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_ban", reason,))
+                        else:
+                            Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) is blacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}), which is not connected to a Discord account.")
+
+                            # Add MC account to ban database but leave Discord ID blank
+                            await cur.execute("INSERT INTO mc_bans (mc_uuid, added_by_id, reason) VALUES (%s, %s, %s)", (mc_uuid, added_by_id, reason,))
+
+                    elif action == "Remove":
+                        user_id = db_state.get("mc_ban_user_id")
+                        existing_added_by_id = db_state.get("mc_ban_added_by_id")
+                        existing_reason = db_state.get("mc_ban_reason")
+
+                        # Used for the logs
+                        username = await fetch_username(client, user_id) if user_id else None
+                        existing_added_by_username = await fetch_username(client, existing_added_by_id) if existing_added_by_id else None
+
+                        # Remove ban
+                        await cur.execute("DELETE FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
+
+                        if user_id:
+                            await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_unban", reason,))
+
+                    # Queries successful, send RCON command
+                    if not await _execute_list_command("blacklist", action, mc_username):
+                        Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute blacklist {action.lower()} command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+                        await conn.rollback()
+
+                        return {
+                            "success": False,
+                            "error": "Failed to execute blacklist command on the server."
+                        }
+
+                    # RCON successful, commit DB
+                    try:
+                        await conn.commit()
+                    except Exception:
+                        await conn.rollback()
+
+                        # Very rare: RCON succeeded, but DB failed to commit. Attempt reverse RCON.
+                        reverse_action = "Remove" if action == "Add" else "Add"
+                        await _execute_list_command("blacklist", reverse_action, mc_username)
+
+                        Logger.error(f"\"{added_by_username}\" (ID: {added_by_id}) passed blacklist logic and RCON command succeeded, but the database failed to commit. A rollback RCON command was sent.")
+                        return {
+                            "success": False,
+                            "error": "An internal database error occurred while saving. Please try again."
+                        }
+
+                    # After successful commit, optionally run whitelist cleanup if needed
+                    if action == "Add" and removed_from_whitelist:
+                        if not await _execute_list_command("whitelist", "Remove", mc_username, allow_missing=True):
+                            Logger.info(f"\"{mc_username}\" (UUID: {mc_uuid}) was successfully blacklisted, but the subsequent optional whitelist removal failed. This is not fatal as the blacklist takes priority.")
+
+        except Exception as e:
+            # Database query (execute) failed
+            Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from modifying the blacklist due to a database error: {e}")
 
             return {
                 "success": False,
-                "error": "Failed to execute blacklist command on the server."
+                "error": "An internal database error occurred while modifying the blacklist."
             }
-
-        # Update database & handle any possible issues
-        if action == "Add":
-            try:
-                async with db.conn_pool.acquire() as conn:
-                    async with conn.cursor() as cur:
-                        # Indicate the start of a transaction group so that rather than executing each one instantly one at a time which could result in de-synced requests, they all happen together
-                        await conn.begin()
-
-                        try:
-                            if user_id:
-                                # Delete existing connected account from database
-                                await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s AND mc_uuid = %s", (user_id, mc_uuid,))
-
-                                # Add MC account to ban database and link with its Discord account
-                                await cur.execute("INSERT INTO mc_bans (mc_uuid, user_id, added_by_id, reason) VALUES (%s, %s, %s, %s)", (mc_uuid, user_id, added_by_id, reason,))
-
-                                # Add to mod log
-                                await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_ban", reason,))
-                            else:
-                                Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) is blacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}), which is not connected to a Discord account.")
-
-                                # Add MC account to ban database but leave Discord ID blank
-                                await cur.execute("INSERT INTO mc_bans (mc_uuid, added_by_id, reason) VALUES (%s, %s, %s)", (mc_uuid, added_by_id, reason,))
-
-                                # No mod log can be added, as there is no associated Discord account, which is a required column in the database
-
-                            # Save simultaneously
-                            await conn.commit()
-                        except Exception:
-                            # If an error occurs executing the transactions in bulk, roll them back to prevent weird bugs with future database transactions
-                            await conn.rollback()
-                            raise
-            except Exception:
-                # Reverse changes if a database update fails to keep them in sync
-                Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) successfully blacklisted the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) server-side, but an error occurred when updating the database.")
-
-                rollback_success = await _execute_list_command("blacklist", "Remove", mc_username)
-
-                if rollback_success and removed_from_whitelist:
-                    rollback_success = await _execute_list_command("whitelist", "Add", mc_username)
-
-                if rollback_success:
-                    Logger.info(f"\"{mc_username}\" (UUID: {mc_uuid}) had its server-side blacklist changes rolled back after the database failed to update.")
-
-                    return {
-                        "success": False,
-                        "error": "Failed to update the database. The server-side changes were rolled back, so this command can be retried."
-                    }
-                Logger.error(f"\"{mc_username}\" (UUID: {mc_uuid}) was blacklisted server-side but the database failed to update AND the rollback failed. Manual correction required.")
-
-                return {
-                    "success": False,
-                    "error": "Failed to update the database AND failed to roll back the server-side changes. Manual correction required."
-                }
-
-        elif action == "Remove":
-            user_id = db_state.get("mc_ban_user_id")
-            existing_added_by_id = db_state.get("mc_ban_added_by_id")
-            existing_reason = db_state.get("mc_ban_reason")
-
-            # Used for the logs
-            username = await fetch_username(client, user_id) if user_id else None
-            existing_added_by_username = await fetch_username(client, existing_added_by_id) if existing_added_by_id else None
-
-            try:
-                async with db.conn_pool.acquire() as conn:
-                    async with conn.cursor() as cur:
-                        # Indicate the start of a transaction group so that rather than executing each one instantly one at a time which could result in de-synced requests, they all happen together
-                        await conn.begin()
-
-                        try:
-                            # Remove ban
-                            await cur.execute("DELETE FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
-
-                            if user_id:
-                                await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_unban", reason,))
-
-                            # Save simultaneously
-                            await conn.commit()
-                        except Exception:
-                            # If something went wrong, clean the connection before letting it go
-                            await conn.rollback()
-                            raise
-            except Exception:
-                # Reverse changes if a database update fails to keep them in sync
-                Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to execute blacklist removal from database for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}), who was banned by \"{existing_added_by_username}\" (ID: {existing_added_by_id}) for {existing_reason}.")
-
-                if await _execute_list_command("blacklist", "Add", mc_username):
-                    Logger.info(f"\"{mc_username}\" (UUID: {mc_uuid}) was restored to the server-side blacklist after the database failed to update.")
-
-                    return {
-                        "success": False,
-                        "error": "Failed to update the database. The server-side removal was rolled back, so this command can be retried."
-                    }
-
-                Logger.error(f"\"{mc_username}\" (UUID: {mc_uuid}) was unblacklisted server-side but the database still holds the ban AND the rollback failed. Manual correction required.")
-
-                return {
-                    "success": False,
-                    "error": "Failed to update the database AND failed to roll back the server-side removal. Manual correction required."
-                }
 
     # Fetch MC avatar from skin
     mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
@@ -441,18 +407,30 @@ async def unwhitelist_user(client: discord.Client, user_id: int, context: str, t
             Logger.warning(f"\"{username}\" (ID: {user_id}) has a malformed linked Minecraft entry \"{target}\" and was skipped during whitelist cleanup ({context}). Manual correction required.", task=task)
             return False
 
-        # allow_missing tolerates the account already being gone server-side, as the goal state is "not whitelisted"
-        if not await _execute_list_command("whitelist", "Remove", target, allow_missing=True):
-            Logger.warning(f"\"{username}\" (ID: {user_id}) could not have their Minecraft account \"{mc_username or "unknown"}\" (UUID: {mc_uuid}) removed from the whitelist ({context}). Manual correction required.", task=task)
-            return False
-
-        # Remove the link from the database
         try:
             async with db.conn_pool.acquire() as conn:
                 async with conn.cursor() as cur:
+                    await conn.begin()
+
+                    # Remove the link from the database
                     await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s", (user_id,))
-        except Exception:
-            Logger.warning(f"\"{username}\" (ID: {user_id}) was removed from the whitelist ({context}), but the database failed to update. Manual correction required.", task=task)
+
+                    # allow_missing tolerates the account already being gone server-side, as the goal state is "not whitelisted"
+                    if not await _execute_list_command("whitelist", "Remove", target, allow_missing=True):
+                        Logger.warning(f"\"{username}\" (ID: {user_id}) could not have their Minecraft account \"{mc_username or "unknown"}\" (UUID: {mc_uuid}) removed from the whitelist ({context}). Manual correction required.", task=task)
+                        await conn.rollback()
+                        return False
+
+                    try:
+                        await conn.commit()
+                    except Exception:
+                        await conn.rollback()
+                        await _execute_list_command("whitelist", "Add", target)
+                        Logger.error(f"\"{username}\" (ID: {user_id}) was removed from the whitelist ({context}), but the database failed to commit. A rollback RCON command was sent.", task=task)
+                        return False
+
+        except Exception as e:
+            Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from being unwhitelisted ({context}) due to a database error: {e}", task=task)
             return False
 
     Logger.info(f"\"{username}\" (ID: {user_id}) was unlinked from \"{mc_username or "unknown"}\" (UUID: {mc_uuid}) and removed from the whitelist ({context}).", task=task)
