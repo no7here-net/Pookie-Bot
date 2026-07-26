@@ -9,9 +9,9 @@ import utilities.database as db
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import config, fetch_username
-from utilities.interactions import VerificationView
+from utilities.helpers import config, fetch_username, get_guild_config
 from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending
+from utilities.interactions import VerificationView
 
 class Invites(commands.Cog):
     def __init__(self, bot):
