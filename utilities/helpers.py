@@ -117,10 +117,6 @@ async def check_host() -> dict:
 
 # Globally forces all commands to pass all conditions for each interaction
 async def is_verified(interaction: discord.Interaction) -> bool:
-    # Block DMs
-    if not interaction.guild:
-        return False
-
     # Bot admin bypass
     if interaction.user.id in (config.get("admins") or []):
         return True
