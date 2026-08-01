@@ -12,7 +12,7 @@ from typing import Literal
 
 import utilities.database as db
 
-from utilities.helpers import config, fetch_username, get_guild_config
+from utilities.helpers import config, fetch_username, get_guild_config, is_quarantined
 from utilities.output import Logger
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
@@ -138,6 +138,10 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
 
     if not role:
         Logger.warning(f"\"{username}\" (ID: {user_id}) will not be automatically verified or removed, as verified role cannot be found.", task=task)
+        return False
+
+    if await is_quarantined(member.guild.id, user_id):
+        Logger.warning(f"\"{username}\" (ID: {user_id}) could not be verified as they are quarantined.", task=task)
         return False
 
     # Grant role
