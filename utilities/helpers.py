@@ -11,8 +11,6 @@ import discord
 import asyncio
 import json
 
-import utilities.database as db
-
 from utilities.output import Logger
 
 # Load static config
@@ -47,6 +45,9 @@ def reload_config():
 # =================
 # SCRIPT LEVEL DEFS
 # =================
+
+# DB import is here to prevent circular import crashes
+import utilities.database as db
 
 customisation = config.get("customisation") or {}
 
