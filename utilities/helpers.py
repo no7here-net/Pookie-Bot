@@ -141,7 +141,7 @@ async def is_verified(interaction: discord.Interaction) -> bool:
 
     # Handle unknown guilds
     if not server_config:
-        return False
+        raise app_commands.CheckFailure()
 
     # Find verified role in server
     verified_role_id = (server_config.get("roles") or {}).get("verified")
@@ -152,7 +152,7 @@ async def is_verified(interaction: discord.Interaction) -> bool:
             return True
 
     # If any checks fail, block
-    return False
+    raise app_commands.CheckFailure()
 
 # ================
 # INTERNAL HELPERS
