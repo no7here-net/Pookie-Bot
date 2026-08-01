@@ -11,6 +11,8 @@ import discord
 import asyncio
 import json
 
+import utilities.database as db
+
 from utilities.output import Logger
 
 # Load static config
@@ -45,6 +47,7 @@ def reload_config():
 # =================
 # SCRIPT LEVEL DEFS
 # =================
+
 customisation = config.get("customisation") or {}
 
 # ===============
@@ -54,6 +57,17 @@ customisation = config.get("customisation") or {}
 # Check for if user is a bot admin
 def is_admin(user_id: int) -> bool:
     return user_id in (config.get("admins") or [])
+
+# Check if a user is currently quarantined
+async def is_quarantined(guild_id: int, user_id: int) -> bool:
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("SELECT 1 FROM quarantine WHERE user_id = %s AND guild_id = %s LIMIT 1", (user_id, guild_id,))
+                return await cur.fetchone() is not None
+    except Exception as e:
+        Logger.error(f"Failed to check quarantine status for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
+        return False
 
 # Fetch emoji ID by name
 def get_emoji(name: str) -> str:
