@@ -169,6 +169,18 @@ async def init_db():
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+
+                # 9. Quarantines (Rather than checking mod logs)
+                await cur.execute("""
+                    CREATE TABLE IF NOT EXISTS quarantine (
+                        user_id BIGINT NOT NULL,
+                        guild_id BIGINT NOT NULL,
+                        added_by_id BIGINT NOT NULL,
+                        reason TEXT,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, guild_id)
+                    )
+                """)
     except Exception as e:
         Logger.error("Failed to create tables in the database. Check log.", str(e))
         raise SystemExit(1)
@@ -177,11 +189,11 @@ async def init_db():
 
 # Said massive warning
 def no_password_warning():
-    Logger.warning("==========================================================================================")
-    Logger.warning("                                                                                          ")
-    Logger.warning("                 YOUR DATABASE IS NOT SECURE! Do NOT ignore this message.                 ")
-    Logger.warning("                                                                                          ")
-    Logger.warning("   Your password was detected as missing and successfully logged in without a password!   ")
-    Logger.warning("            The bot will continue for now, but this is a MAJOR security issue!            ")
-    Logger.warning("                                                                                          ")
-    Logger.warning("==========================================================================================")
+    Logger.warning("############################################################################################")
+    Logger.warning("#                                                                                          #")
+    Logger.warning("#                 YOUR DATABASE IS NOT SECURE! Do NOT ignore this message.                 #")
+    Logger.warning("#                                                                                          #")
+    Logger.warning("#   Your password was detected as missing and successfully logged in without a password!   #")
+    Logger.warning("#            The bot will continue for now, but this is a MAJOR security issue!            #")
+    Logger.warning("#                                                                                          #")
+    Logger.warning("############################################################################################")
