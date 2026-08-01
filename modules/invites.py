@@ -9,7 +9,7 @@ import utilities.database as db
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import config, fetch_username, get_guild_config
+from utilities.helpers import config, fetch_username, get_guild_config, is_quarantined
 from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending
 from utilities.interactions import VerificationView
 
@@ -22,6 +22,79 @@ class Invites(commands.Cog):
 
     def cog_unload(self):
         self.verify_sweeper.cancel()
+
+    @app_commands.command(name="verify", description="Manually verify a user or manage automatic member verification on member join.")
+    @app_commands.describe(action="Whether to add, remove, or list pre-verified users. Add also manually verifies existing members.", user="User to target. Required for Add and Remove.")
+    async def verify(self, interaction: discord.Interaction, action: Literal["Add", "Remove", "List"] = "Add", user: discord.User = None):
+        # Add & remove target a specific user, so one must be provided
+        if action in ("Add", "Remove") and user is None:
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} a verification without providing a user.")
+            embed = Embeds.error("You must provide a user for this action.")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Prevent Discord timing out
+        await interaction.response.defer(ephemeral=True)
+
+        if action == "Add":
+            if await is_quarantined(interaction.guild.id, user.id):
+                embed = Embeds.error("This user is currently quarantined and cannot be verified.")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            member = interaction.guild.get_member(user.id)
+            if member:
+                # User is in server, manually verify
+                if await verify_member(member):
+                    embed = Embeds.success(f"<@{user.id}> has been manually verified.")
+                else:
+                    embed = Embeds.error(f"Failed to verify <@{user.id}>. Check logs.")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+            else:
+                # User is not in server, pre-verify
+                result = await preverify_logic(self.bot, action, interaction.guild.id, user.id, interaction.user.id)
+                if not result.get("success"):
+                    embed = Embeds.error(result.get("error"))
+                else:
+                    embed = Embeds.success(f"<@{user.id}> will bypass verification when they join.")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+        elif action == "Remove":
+            # Just remove from pre_verified list
+            result = await preverify_logic(self.bot, action, interaction.guild.id, user.id, interaction.user.id)
+            if not result.get("success"):
+                embed = Embeds.error(result.get("error"))
+            else:
+                embed = Embeds.success(f"<@{user.id}> will no longer bypass verification when they join.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        elif action == "List":
+            # Fetch all entries for this server
+            result = await preverify_list(interaction.guild.id)
+
+            if not result.get("success"):
+                embed = Embeds.error(result.get("error"))
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            entries = result.get("entries") or ()
+
+            if not entries:
+                embed = Embeds.info("No users are currently pre-verified.")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            # Cap the output so huge lists cannot overflow the embed description limit
+            lines = [f"<@{user_id}> - added by <@{added_by_id}> <t:{int(added_at.timestamp())}:R>" for user_id, added_by_id, added_at in entries[:25]]
+
+            if len(entries) > 25:
+                lines.append(f"...and {len(entries) - 25} more.")
+
+            embed = Embeds.info("\n".join(lines))
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="preverify", description="Manage automatic member verification on member join.")
     @app_commands.describe(action="Whether to add, remove, or list pre-verified users.", user="User to target. Required for Add and Remove.")
@@ -88,6 +161,21 @@ class Invites(commands.Cog):
             Logger.warning(f"\"{member.name}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) but the server is not in config.json, skipping gatekeeper.")
             return
 
+        # Find the joins channel
+        channel = await self._get_joins_channel(member.guild, server_config)
+
+        # Detect quarantined members
+        if await is_quarantined(member.guild.id, member.id):
+            Logger.info(f"\"{member.name}\" (ID: {member.id}) joined while quarantined. Ignoring verification flow.")
+
+            if channel:
+                embed = Embeds.warning(f"Quarantined account <@{member.id}> has joined the server. They will remain unverified and ignored by the gatekeeper system.")
+                try:
+                    await channel.send(embed=embed)
+                except Exception:
+                    Logger.warning(f"Failed to send quarantine join warning for \"{member.name}\" (ID: {member.id}) in channel (ID: {channel.id}).")
+            return
+
         # Fetch pre-verification state & any leftover pending message from a previous join
         join_state = await fetch_join_state(member.guild.id, member.id)
 
@@ -96,9 +184,6 @@ class Invites(commands.Cog):
             Logger.warning(f"\"{member.name}\" (ID: {member.id}) could not be checked against the pre-verified list due to a database exception. Falling back to standard verification.")
 
         old_message_id = join_state.get("pending_message_id")
-
-        # Find the joins channel
-        channel = await self._get_joins_channel(member.guild, server_config)
 
         if not channel:
             Logger.error(f"\"{member.name}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) but the joins channel could not be found. The gatekeeper timer still applies, so they must be verified manually via role grant.")
@@ -336,7 +421,6 @@ class Invites(commands.Cog):
                 await channel.send(embed=embed)
         except Exception:
             Logger.warning(f"Pre-verification for user (ID: {user_id}) could not be announced in the joins channel (ID: {channel.id}).", task=task)
-
 
 async def setup(bot):
     await bot.add_cog(Invites(bot))
