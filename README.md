@@ -7,26 +7,28 @@
 - [ ] Administration
     - [ ] Reload 
     - [ ] Update
-        - [ ] Pookie Bot
-        - [ ] London Server
-        - [ ] Roubaix Server
+        - [ ] Pookie bot
+        - [ ] London server
+        - [ ] Roubaix server
     - [ ] Eval
 - [ ] General
     - [ ] Ping
     - [ ] Status
-        - [x] Internet Access
-        - [x] London Server
-        - [x] Roubaix Server
-        - [x] Minecraft Server
-        - [ ] Cloudflare Services
-- [ ] Invites
+        - [x] Internet access
+        - [x] London server
+        - [x] Roubaix server
+        - [x] Minecraft server
+        - [ ] Cloudflare services
+- [x] Invites
+    - [x] Automatic kicks
+    - [x] Manual invites
 - [ ] Minecraft
     - [x] Whitelist
     - [x] Unlink
-    - [ ] Blacklist
+    - [x] Blacklist
     - [ ] RCON commands
-    - [x] Status Monitoring
-    - [ ] Automatic Updates
+    - [x] Status monitoring
+    - [ ] Automatic updates
 - [ ] Moderation
     - [ ] Kick
     - [ ] Ban
@@ -34,8 +36,10 @@
     - [ ] Unban
     - [ ] Unmute
     - [ ] Announce
+    - [ ] Quarantine
+    - [ ] Auto-mod
 - [ ] Stats
-    - [ ] Message Logging
-    - [ ] Voice Logging
-    - [ ] Reaction Logging
-    - [ ] Command Logging
+    - [ ] Message logging
+    - [ ] Voice logging
+    - [ ] Reaction logging
+    - [ ] Command logging
