@@ -172,22 +172,23 @@ class Invites(commands.Cog):
         # Fetch quarantine state
         quarantine = await is_quarantined(member.guild.id, member.id)
 
+        embed = None
+
         if quarantine is None:
-            Logger.warning(f"\"{member.name}\" (ID: {member.id}) could not be checked against the quarantined list due to a database exception. Falling back to standard verification.")
-
-            embed = Embeds.warning(f"<@{member.id}> has joined the server but could not be checked against quarantined list. If they are not quarantined, they require manual verification.")
-
-        if quarantine:
-            Logger.info(f"\"{member.name}\" (ID: {member.id}) joined while quarantined. Ignoring verification flow.")
-
+            Logger.warning(f"... could not be checked against the quarantined list due to a database exception. Falling back to standard verification.")
+            embed = Embeds.warning(f"<@{member.id}> has joined the server but could not be checked against the quarantine list. If they are not quarantined, they require manual verification.")
+        elif quarantine:
+            Logger.info(f"... joined while quarantined. Ignoring verification flow.")
             embed = Embeds.warning(f"Quarantined account <@{member.id}> has joined the server. They will remain unverified and ignored by the gatekeeper system.")
 
-        # Send an embed
-        if channel:
+        if embed and channel:
             try:
                 await channel.send(embed=embed)
             except Exception:
                 Logger.warning(f"Failed to send quarantine join warning for \"{member.name}\" (ID: {member.id}) in channel (ID: {channel.id}).")
+
+        # Only a confirmed quarantine halts the gatekeeper
+        if quarantine:
             return
 
         # Fetch pre-verification state & any leftover pending message from a previous join

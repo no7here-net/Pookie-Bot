@@ -141,7 +141,7 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         return False
 
     # Find if they are quarantined
-    quarantine = await is_quarantined(interaction.guild.id, user.id)
+    quarantine = await is_quarantined(member.guild.id, user_id)
 
     # Catch quarantine check failures
     if quarantine is None:
