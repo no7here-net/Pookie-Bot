@@ -101,57 +101,6 @@ class Invites(commands.Cog):
             embed = Embeds.info("\n".join(lines))
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="preverify", description="Manage automatic member verification on member join.")
-    @app_commands.describe(action="Whether to add, remove, or list pre-verified users.", user="User to target. Required for Add and Remove.")
-    async def preverify(self, interaction: discord.Interaction, action: Literal["Add", "Remove", "List"], user: discord.User = None):
-        # Add & remove target a specific user, so one must be provided
-        if action in ("Add", "Remove") and user is None:
-            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} a pre-verification without providing a user.")
-            embed = Embeds.error("You must provide a user for this action.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
-        # Prevent Discord timing out
-        await interaction.response.defer(ephemeral=True)
-
-        # Add & remove logic are handled by a single logic function
-        if action in ("Add", "Remove"):
-            # Send info to logic
-            result = await preverify_logic(self.bot, action, interaction.guild.id, user.id, interaction.user.id)
-
-            if not result.get("success"):
-                # Error message already ends with a full stop
-                embed = Embeds.error(result.get("error"))
-            else:
-                embed = Embeds.success(f"<@{user.id}> will {"no longer " if action == "Remove" else ""}bypass verification when they join.")
-
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
-        elif action == "List":
-            # Fetch all entries for this server
-            result = await preverify_list(interaction.guild.id)
-
-            if not result.get("success"):
-                embed = Embeds.error(result.get("error"))
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
-
-            entries = result.get("entries") or ()
-
-            if not entries:
-                embed = Embeds.info("No users are currently pre-verified.")
-                await interaction.followup.send(embed=embed, ephemeral=True)
-                return
-
-            # Cap the output so huge lists cannot overflow the embed description limit
-            lines = [f"<@{user_id}> - added by <@{added_by_id}> <t:{int(added_at.timestamp())}:R>" for user_id, added_by_id, added_at in entries[:25]]
-
-            if len(entries) > 25:
-                lines.append(f"...and {len(entries) - 25} more.")
-
-            embed = Embeds.info("\n".join(lines))
-            await interaction.followup.send(embed=embed, ephemeral=True)
-
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         # Prevents bots being put through this automated system - they go through a different permission flow via oauth limited to admins, they don't need checking
