@@ -18,8 +18,8 @@
     "modules": {
         "admin": false,
         "general": false,
-        "invites": false,
-        "minecraft": false,
+        "invites": true,
+        "minecraft": true,
         "moderation": false,
         "stats": false
     },
