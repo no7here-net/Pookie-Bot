@@ -144,6 +144,6 @@ except Exception as e:
     Logger._print_fallback("Failed to start background logging worker thread.", e)
 
     # Abort
-    raise SystemExit(1)
+    raise SystemExit(1) from None
 
 Logger.info(f"Logging started. Writing to \"logs/{_START_TIME}.log\".")

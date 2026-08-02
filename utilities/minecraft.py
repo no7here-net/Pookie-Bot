@@ -72,7 +72,7 @@ async def check_rcon(task: bool = False) -> dict:
     results = await asyncio.gather(*rcon_tasks)
 
     # Return a KV dictionary
-    return dict(zip(server_names, results))
+    return dict(zip(server_names, results, strict=True))
 
 # Fetches and either links or unlinks a Minecraft and Discord account
 async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove"], user_id: int, mc_username: str) -> dict:
