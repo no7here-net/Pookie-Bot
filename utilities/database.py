@@ -183,7 +183,7 @@ async def init_db():
                 """)
     except Exception as e:
         Logger.error("Failed to create tables in the database. Check log.", str(e))
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     Logger.info("Database tables verified.")
 

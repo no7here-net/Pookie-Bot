@@ -314,7 +314,6 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
 
                         # Used for the logs
                         username = await fetch_username(client, user_id) if user_id else None
-                        existing_added_by_username = await fetch_username(client, existing_added_by_id) if existing_added_by_id else None
 
                         # Remove ban
                         await cur.execute("DELETE FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))

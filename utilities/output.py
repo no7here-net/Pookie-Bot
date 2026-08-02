@@ -128,7 +128,7 @@ except Exception as e:
     Logger._print_fallback("Failed to create logs folder.", e)
 
     # Abort
-    raise SystemExit(1)
+    raise SystemExit(1) from None
 
 try:
     # Start background logging worker thread

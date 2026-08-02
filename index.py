@@ -141,4 +141,4 @@ if __name__ == "__main__":
         bot.run(os.environ.get(env_key), log_handler=None)
     except Exception as e:
         Logger.error("Bot failed to login. Check log.", str(e))
-        raise SystemExit(1)
+        raise SystemExit(1) from None
