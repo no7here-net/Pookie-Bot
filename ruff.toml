@@ -1,0 +1,10 @@
+line-length = 200
+
+[lint]
+select = ["F", "E9", "Q", "ASYNC", "B", "UP"]
+ignore = ["Q003"]
+
+[lint.flake8-quotes]
+inline-quotes = "double"
+multiline-quotes = "double"
+docstring-quotes = "double"
