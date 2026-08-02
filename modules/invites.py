@@ -50,6 +50,15 @@ class Invites(commands.Cog):
 
             member = interaction.guild.get_member(user.id)
             if member:
+                # Already has the role, so there is nothing to do
+                verified_role_id = (get_guild_config(interaction.guild.id).get("roles") or {}).get("verified")
+
+                if verified_role_id and any(role.id == verified_role_id for role in member.roles):
+                    Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to verify \"{member.name}\" (ID: {member.id}) but they are already verified.")
+                    embed = Embeds.error(f"<@{user.id}> is already verified.")
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    return
+
                 # User is in server, manually verify
                 if await verify_member(member):
                     embed = Embeds.success(f"<@{user.id}> has been manually verified.")
