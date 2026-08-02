@@ -12,7 +12,7 @@ from typing import Literal
 
 import utilities.database as db
 
-from utilities.helpers import config, fetch_username, get_guild_config, is_quarantined
+from utilities.helpers import fetch_username, get_guild_config, is_quarantined
 from utilities.output import Logger
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join

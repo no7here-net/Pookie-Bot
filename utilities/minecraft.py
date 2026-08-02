@@ -310,7 +310,6 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                     elif action == "Remove":
                         user_id = db_state.get("mc_ban_user_id")
                         existing_added_by_id = db_state.get("mc_ban_added_by_id")
-                        existing_reason = db_state.get("mc_ban_reason")
 
                         # Used for the logs
                         username = await fetch_username(client, user_id) if user_id else None

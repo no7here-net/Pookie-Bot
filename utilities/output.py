@@ -125,7 +125,7 @@ try:
         os.mkdir("logs")
 except Exception as e:
     # Print via the shared emergency printer
-    Logger._print_fallback("Failed to create logs folder.", e)
+    Logger._print_fallback("Failed to start background logging worker thread.", e)
 
     # Abort
     raise SystemExit(1) from None

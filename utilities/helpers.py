@@ -19,7 +19,7 @@ from utilities.output import Logger
 # Load static config
 def load_config():
     path = os.environ.get("POOKIE_CONFIG", "config.json")
-    with open(path, "r") as f:
+    with open(path) as f:
         return json.load(f)
 
 config = load_config()
@@ -146,7 +146,7 @@ async def check_host() -> dict:
     results = await asyncio.gather(*ping_tasks)
 
     # Create KV dictionary of hostnames and results
-    return dict(zip(hostnames, results))
+    return dict(zip(hostnames, results, strict=True))
 
 # ==================
 # PERMISSION CHECKER
