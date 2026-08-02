@@ -1,0 +1,51 @@
+{
+    "auth": {
+        "discord_token": "ENV_DISCORD_TOKEN",
+        "database": {
+            "name": "pookie_bot",
+            "host": "127.0.0.1",
+            "username": "root",
+            "password": "ENV_DB_PASSWORD"
+        },
+        "ssh": []
+    },
+    "modules": {
+        "admin": false,
+        "general": false,
+        "invites": false,
+        "minecraft": false,
+        "moderation": false,
+        "stats": false
+    },
+    "minecraft": {
+        "servers": {}
+    },
+    "customisation": {
+        "colours": {
+            "error": "f97676",
+            "warning": "fc9a4a",
+            "success": "34d399",
+            "info": "2fbffd"
+        },
+        "emojis": {
+            "error": "<:error:000000000000000001>",
+            "warning": "<:warning:000000000000000002>",
+            "success": "<:success:000000000000000003>",
+            "info": "<:info:000000000000000004>"
+        }
+    },
+    "servers": [{
+        "guild_id": 111111111111111111,
+        "roles": {
+            "verified": 222222222222222222
+        },
+        "channels": {
+            "mc_status": 333333333333333331,
+            "mc_chat": 333333333333333332,
+            "mc_logs": 333333333333333333,
+            "joins": 333333333333333334,
+            "logs": 333333333333333335
+        }
+    }],
+    "admins": []
+}

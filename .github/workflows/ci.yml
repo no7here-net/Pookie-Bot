@@ -51,3 +51,4 @@ jobs:
       - run: pytest
         env:
           POOKIE_CONFIG: tests/config.test.json
+          ENV_DB_PASSWORD: test
