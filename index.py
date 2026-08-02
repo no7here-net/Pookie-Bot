@@ -6,7 +6,7 @@ from discord import app_commands
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import config, is_verified
+from utilities.helpers import config, is_verified, format_duration
 from utilities.interactions import VerificationView
 from utilities.minecraft import close_http_session
 
@@ -108,8 +108,8 @@ class PookieBot(commands.Bot):
 
         # If user is executing commands too fast
         elif isinstance(error, app_commands.CommandOnCooldown):
-            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was ratelimited from executing the command \"{cmd_name}\" for {error.retry_after:.1f} seconds.")
-            await self._send_error_embed(interaction, f"You've been rate limited. Try again in {error.retry_after:.1f} seconds.")
+            Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) was ratelimited from executing the command \"{cmd_name}\" for {format_duration(error.retry_after)}.")
+            await self._send_error_embed(interaction, f"You've been rate limited. Try again <t:{int(time.time() + error.retry_after)}:R>.")
 
         # If user fails global permission checks
         elif isinstance(error, app_commands.CheckFailure):
