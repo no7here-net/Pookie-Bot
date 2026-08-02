@@ -57,6 +57,23 @@ customisation = config.get("customisation") or {}
 # COMMAND HELPERS
 # ===============
 
+# Formats time for logging
+def format_duration(seconds: float, max_units: int = 2) -> str:
+    seconds = int(seconds)
+    if seconds <= 0:
+        return "a moment"
+
+    parts = []
+    for name, size in (("day", 86400), ("hour", 3600), ("minute", 60), ("second", 1)):
+        value, seconds = divmod(seconds, size)
+        if value:
+            parts.append(f"{value} {name}{"s" if value != 1 else ""}")
+
+    parts = parts[:max_units]
+    if len(parts) == 1:
+        return parts[0]
+    return f"{", ".join(parts[:-1])} and {parts[-1]}"
+
 # Check for if user is a bot admin
 def is_admin(user_id: int) -> bool:
     return user_id in (config.get("admins") or [])
