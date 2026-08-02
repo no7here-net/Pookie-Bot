@@ -23,6 +23,7 @@ class Invites(commands.Cog):
     def cog_unload(self):
         self.verify_sweeper.cancel()
 
+    @app_commands.checks.cooldown(3, 86400)
     @app_commands.command(name="verify", description="Manually verify a user or manage automatic member verification on member join.")
     @app_commands.describe(action="Whether to add, remove, or list pre-verified users. Add also manually verifies existing members.", user="User to target. Required for Add and Remove.")
     async def verify(self, interaction: discord.Interaction, action: Literal["Add", "Remove", "List"] = "Add", user: discord.User = None):
