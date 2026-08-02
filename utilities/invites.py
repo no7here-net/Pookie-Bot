@@ -140,7 +140,15 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         Logger.warning(f"\"{username}\" (ID: {user_id}) will not be automatically verified or removed, as verified role cannot be found.", task=task)
         return False
 
-    if await is_quarantined(member.guild.id, user_id):
+    # Find if they are quarantined
+    quarantine = await is_quarantined(interaction.guild.id, user.id)
+
+    # Catch quarantine check failures
+    if quarantine is None:
+        Logger.warning(f"\"{username}\" (ID: {user_id}) could not be checked against quarantine list.", task=task)
+        return False
+    # They're quarantined, block
+    if quarantine:
         Logger.warning(f"\"{username}\" (ID: {user_id}) could not be verified as they are quarantined.", task=task)
         return False
 

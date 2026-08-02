@@ -68,9 +68,9 @@ async def is_quarantined(guild_id: int, user_id: int) -> bool:
             async with conn.cursor() as cur:
                 await cur.execute("SELECT 1 FROM quarantine WHERE user_id = %s AND guild_id = %s LIMIT 1", (user_id, guild_id,))
                 return await cur.fetchone() is not None
-    except Exception as e:
+    except Exception:
         # Fail close -
-        Logger.warning(f"Failed to check quarantine status for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
+        Logger.warning(f"Failed to check quarantine status for user (ID: {user_id}) in server (ID: {guild_id}).")
         return None
 
 # Fetch emoji ID by name
