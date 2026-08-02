@@ -152,7 +152,7 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         Logger.warning(f"\"{username}\" (ID: {user_id}) could not be verified as they are quarantined.", task=task)
         return False
 
-    if role.id and any(role.id == verified_role_id for role in member.roles):
+    if role in member.roles:
         Logger.warning(f"\"{username}\" (ID: {user_id}) will not be given the verified role as they are already verified.", task=task)
         return False
 
