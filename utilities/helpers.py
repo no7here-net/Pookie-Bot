@@ -62,7 +62,7 @@ def is_admin(user_id: int) -> bool:
     return user_id in (config.get("admins") or [])
 
 # Check if a user is currently quarantined
-async def is_quarantined(guild_id: int, user_id: int) -> bool:
+async def is_quarantined(guild_id: int, user_id: int) -> bool | None:
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
