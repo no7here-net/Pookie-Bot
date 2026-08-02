@@ -175,10 +175,10 @@ class Invites(commands.Cog):
         embed = None
 
         if quarantine is None:
-            Logger.warning(f"... could not be checked against the quarantined list due to a database exception. Falling back to standard verification.")
+            Logger.warning(f"\"{member.name}\" (ID: {member.id}) could not be checked against the quarantined list due to a database exception. Falling back to standard verification.")
             embed = Embeds.warning(f"<@{member.id}> has joined the server but could not be checked against the quarantine list. If they are not quarantined, they require manual verification.")
         elif quarantine:
-            Logger.info(f"... joined while quarantined. Ignoring verification flow.")
+            Logger.info(f"\"{member.name}\" (ID: {member.id}) joined while quarantined. Ignoring verification flow.")
             embed = Embeds.warning(f"Quarantined account <@{member.id}> has joined the server. They will remain unverified and ignored by the gatekeeper system.")
 
         if embed and channel:
