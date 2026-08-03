@@ -640,5 +640,5 @@ def _sync_check_rcon(host: str, port: int, password: str, task: bool = False) ->
         with MCRcon(host, password, port=port):
             return True
     except Exception as e:
-        Logger.warning(f"RCON check failed for \"{host}:{port}\".", str(e), task=task)
+        Logger.warning(f"RCON check failed for \"{host}:{port}\".", task=task)
         return False
