@@ -68,8 +68,10 @@ class Invites(commands.Cog):
 
             member = interaction.guild.get_member(user.id)
             if member:
+                server_config = get_guild_config(interaction.guild.id)
+
                 # Already has the role, so there is nothing to do
-                verified_role_id = (get_guild_config(interaction.guild.id).get("roles") or {}).get("verified")
+                verified_role_id = (server_config.get("roles") or {}).get("verified")
 
                 if verified_role_id and any(role.id == verified_role_id for role in member.roles):
                     Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to verify \"{member.name}\" (ID: {member.id}) but they are already verified.")
@@ -77,9 +79,16 @@ class Invites(commands.Cog):
                     await interaction.followup.send(embed=embed, ephemeral=True)
                     return
 
+                # Fetch any pending join message before verify_member() deletes the row
+                join_state = await fetch_join_state(interaction.guild.id, user.id)
+                old_message_id = join_state.get("pending_message_id")
+
                 # User is in server, manually verify
                 if await verify_member(member):
                     embed = Embeds.success(f"<@{user.id}> has been manually verified.")
+
+                    # Retire the gatekeeper message, matching what the verify button does
+                    await self._retire_join_message(interaction.guild, server_config, old_message_id, Embeds.info(f"<@{user.id}> was verified by <@{interaction.user.id}>."))
                 else:
                     embed = Embeds.error(f"Failed to verify <@{user.id}>. Check logs.")
                 await interaction.followup.send(embed=embed, ephemeral=True)
@@ -226,6 +235,39 @@ class Invites(commands.Cog):
                 Logger.warning(f"\"{member.name}\" (ID: {member.id}) rejoined but their previous join message could not be updated (Message ID: {old_message_id}).")
 
         Logger.info(f"\"{member.name}\" (ID: {member.id}) joined \"{member.guild.name}\" (ID: {member.guild.id}) and is pending verification.")
+
+    # Retires the gatekeeper message when a pending member leaves, so its buttons don't linger on someone who isn't here
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        # Match server in config
+        server_config = get_guild_config(member.guild.id)
+
+        if not server_config:
+            return
+
+        # Only members still pending have a message worth editing
+        join_state = await fetch_join_state(member.guild.id, member.id)
+        message_id = join_state.get("pending_message_id")
+
+        if not message_id:
+            return
+
+        # A ban raises this event too, and the ban path writes its own message, so don't overwrite it
+        try:
+            await member.guild.fetch_ban(discord.Object(id=member.id))
+            return
+        except discord.NotFound:
+            pass
+        except Exception:
+            Logger.warning(f"\"{member.name}\" (ID: {member.id}) left whilst pending but the ban list could not be checked. Updating their join message anyway.")
+
+        # The pending row is deliberately left in place so the gatekeeper timer keeps running whilst they are away
+        embed = Embeds.warning(f"<@{member.id}> left before verifying. They will still be banned when their 24 hour window expires unless they rejoin and are verified.")
+
+        await self._retire_join_message(member.guild, server_config, message_id, embed)
+
+        Logger.info(f"\"{member.name}\" (ID: {member.id}) left \"{member.guild.name}\" (ID: {member.guild.id}) whilst pending verification. The gatekeeper timer still applies.")
+
 
     # Run every hour to catch users who didn't get verified in 24h
     @tasks.loop(hours=1)
@@ -397,6 +439,24 @@ class Invites(commands.Cog):
             return await guild.fetch_channel(channel_id)
         except Exception:
             return None
+
+    # Edits a pending join message in place and strips its buttons, so stale buttons never linger
+    async def _retire_join_message(self, guild: discord.Guild, server_config: dict, message_id: int, embed: discord.Embed, task: bool = False) -> bool:
+        if not message_id:
+            return False
+
+        channel = await self._get_joins_channel(guild, server_config)
+
+        if not channel:
+            return False
+
+        try:
+            message = await channel.fetch_message(message_id)
+            await message.edit(embed=embed, view=None)
+            return True
+        except Exception:
+            Logger.warning(f"Join message (ID: {message_id}) could not be updated in the joins channel (ID: {channel.id}).", task=task)
+            return False
 
     # Announces a pre-verification in the joins channel. Retires the user's old join message if one exists so stale buttons never linger.
     async def _announce_preverify(self, channel, user_id: int, added_by_id: int, old_message_id: int = None, task: bool = False):
