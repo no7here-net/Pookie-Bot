@@ -43,3 +43,5 @@
     - [ ] Voice logging
     - [ ] Reaction logging
     - [ ] Command logging
+
+Licensed under the [GNU AGPL v3.0 or later](LICENSE).
