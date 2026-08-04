@@ -204,7 +204,7 @@ class Invites(commands.Cog):
         message = None
 
         if channel:
-            embed = Embeds.info(f"<@{member.id}> joined and is awaiting verification. Their account was created <t:{int(member.created_at.timestamp())}:R>. They will be banned <t:{int(time.time() + 86400)}:R> unless verified.")
+            embed = Embeds.info(f"<@{member.id}> joined and is awaiting verification. Their account was created <t:{int(member.created_at.timestamp())}:R>. They will be banned <t:{int(time.time() + 86400)}:R> unless verified.\n\n**Only verify users if you know who they are.**")
 
             try:
                 message = await channel.send(embed=embed, view=VerificationView())
@@ -229,7 +229,13 @@ class Invites(commands.Cog):
         if old_message_id and channel:
             try:
                 old_message = await channel.fetch_message(old_message_id)
-                embed = Embeds.info(f"<@{member.id}> rejoined before being verified. Verification moved to a newer message.")
+
+                # Link straight to the live message so it can be found without scrolling
+                if message:
+                    embed = Embeds.info(f"<@{member.id}> rejoined before being verified. Verification moved to [a newer message]({message.jump_url}).")
+                else:
+                    embed = Embeds.info(f"<@{member.id}> rejoined before being verified, but a new verification message could not be posted. Manual verification or removal required.")
+
                 await old_message.edit(embed=embed, view=None)
             except Exception:
                 Logger.warning(f"\"{member.name}\" (ID: {member.id}) rejoined but their previous join message could not be updated (Message ID: {old_message_id}).")
