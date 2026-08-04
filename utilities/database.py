@@ -76,6 +76,10 @@ async def init_db():
 
     # Verify database is not missing any tables
     try:
+        # Silence warnings from already exists, expected here
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*already exists.*")
+
         async with conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
                 # 1. Pre-Verified Users
