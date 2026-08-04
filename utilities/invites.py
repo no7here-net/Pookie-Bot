@@ -106,15 +106,17 @@ async def fetch_join_state(guild_id: int, user_id: int) -> dict:
                 await cur.execute("""
                     SELECT
                         (SELECT added_by_id FROM pre_verified WHERE user_id = %s AND guild_id = %s LIMIT 1),
-                        (SELECT message_id FROM pending_verifications WHERE user_id = %s AND guild_id = %s LIMIT 1)
-                """, (user_id, guild_id, user_id, guild_id,))
+                        (SELECT message_id FROM pending_verifications WHERE user_id = %s AND guild_id = %s LIMIT 1),
+                        (SELECT join_time FROM pending_verifications WHERE user_id = %s AND guild_id = %s LIMIT 1)
+                """, (user_id, guild_id, user_id, guild_id, user_id, guild_id,))
                 result = await cur.fetchone()
 
                 # Contains information to resolve whether a user was pre-verified (and by who) and any pending verification message left over from a previous join
                 return {
                     "success": True,
                     "preverified_by_id": result[0],
-                    "pending_message_id": result[1]
+                    "pending_message_id": result[1],
+                    "pending_join_time": result[2]
                 }
     except Exception as e:
         Logger.error(f"Failed to fetch join state for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
