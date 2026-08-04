@@ -4,6 +4,7 @@
 # Creates global variable accessible to other files for cursor access
 
 import aiomysql
+import warnings
 import os
 import re
 
