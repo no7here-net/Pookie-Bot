@@ -261,8 +261,12 @@ class Invites(commands.Cog):
         except Exception:
             Logger.warning(f"\"{member.name}\" (ID: {member.id}) left whilst pending but the ban list could not be checked. Updating their join message anyway.")
 
+        # Match the live countdown used on the original join message
+        deadline = f"<t:{int(join_state.get("pending_join_time").timestamp() + 86400)}:R>" if join_state.get("pending_join_time") else "when their 24 hour window expires"
+
+        embed = Embeds.warning(f"<@{member.id}> left before verifying. They will still be banned {deadline} unless they rejoin and are verified.")
+
         # The pending row is deliberately left in place so the gatekeeper timer keeps running whilst they are away
-        embed = Embeds.warning(f"<@{member.id}> left before verifying. They will still be banned when their 24 hour window expires unless they rejoin and are verified.")
 
         await self._retire_join_message(member.guild, server_config, message_id, embed)
 
