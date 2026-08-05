@@ -27,6 +27,7 @@
 
 import discord
 import asyncio
+import uuid
 import json
 import os
 
@@ -135,6 +136,25 @@ async def fetch_username(client: discord.Client, user_id: int) -> str:
     except discord.HTTPException:
         # Prevents ratelimits or Discord API outages from crashing the bot
         return "Unknown User (API Error)"
+
+# Logs a moderation action to the database - takes optional cursor to join caller's transaction
+async def log_action(guild_id: int, user_id: int, added_by_id: int, action: str, reason: str, cur=None) -> bool:
+    query = "INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)"
+    params = (str(uuid.uuid4()), guild_id, user_id, added_by_id, action, reason,)
+
+    # Join the caller's transaction, so a rolled back action cannot leave its log behind
+    if cur is not None:
+        await cur.execute(query, params)
+        return True
+
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as own_cur:
+                await own_cur.execute(query, params)
+        return True
+    except Exception as e:
+        Logger.error(f"Failed to record the moderation action \"{action}\" for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
+        return False
 
 # ===============
 # STATUS CHECKERS
