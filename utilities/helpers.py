@@ -18,9 +18,9 @@
 
 # Handle various misc. parts of bot
 # - Bot admin check
-# - Emoji finder
-# - HEX converter (for embed colours)
 # - Username fetcher
+# - Duration formatter
+# - Quarantine check
 # - Status checkers
 #   - Cloudflare & Google DNS checks for internet connectivity... I get the irony of it being a Discord bot ok
 #   - SSH access check
