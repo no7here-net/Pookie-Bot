@@ -274,7 +274,7 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
                 await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
                 await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
                 # Log the ban action using the bot's own ID as the added_by_id
-                log_action(guild.id, user_id, added_by_id, "ban", reason, cur)
+                await log_action(guild.id, user_id, added_by_id, "ban", reason, cur)
     except Exception:
         Logger.warning(f"\"{username}\" (ID: {user_id}) was banned, but the database failed to update. Manual correction required.", task=task)
         return True

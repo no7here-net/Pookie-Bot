@@ -317,7 +317,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                             await cur.execute("INSERT INTO mc_bans (mc_uuid, user_id, added_by_id, reason) VALUES (%s, %s, %s, %s)", (mc_uuid, user_id, added_by_id, reason,))
 
                             # Add to mod log
-                            log_action(guild_id, user_id, added_by_id, "mc_ban", reason, cur)
+                            await log_action(guild_id, user_id, added_by_id, "mc_ban", reason, cur)
                         else:
                             Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) is blacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}), which is not connected to a Discord account.")
 
@@ -335,7 +335,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                         await cur.execute("DELETE FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
 
                         if user_id:
-                            log_action(guild_id, user_id, added_by_id, "mc_unban", reason, cur)
+                            await log_action(guild_id, user_id, added_by_id, "mc_unban", reason, cur)
 
                     # Queries successful, send RCON command
                     if not await _execute_list_command("blacklist", action, mc_username):
