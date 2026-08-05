@@ -41,6 +41,22 @@ _mc_state_lock = asyncio.Lock()
 # Shared HTTP session for all Mojang API / avatar lookups
 _http_session = None
 
+# MCRcon variant that is safe to use off the main thread
+class ThreadSafeMCRcon(MCRcon):
+    def __init__(self, host: str, password: str, port: int = 25575, tlsmode: int = 0, timeout: int = 5):
+        self.host = host
+        self.password = password
+        self.port = port
+        self.tlsmode = tlsmode
+        self.socket_timeout = timeout
+
+        # 0 disables the signal.alarm() calls in the inherited _read()
+        self.timeout = 0
+
+    def connect(self):
+        super().connect()
+        self.socket.settimeout(self.socket_timeout)
+
 # Check Minecraft host(s)
 async def check_rcon(task: bool = False) -> dict:
     # Fetch Minecraft server list from config
@@ -645,7 +661,7 @@ async def _send_velocity_command(command: str, task: bool = False) -> str:
 # Internal RCON broadcast helpers
 def _sync_send_rcon(host: str, port: int, password: str, command: str, task: bool = False) -> str:
     try:
-        with MCRcon(host, password, port=port) as mcr:
+        with ThreadSafeMCRcon(host, password, port=port) as mcr:
             response = mcr.command(command)
             return response
     except Exception as e:
@@ -655,7 +671,7 @@ def _sync_send_rcon(host: str, port: int, password: str, command: str, task: boo
 # Internal RCON helper function
 def _sync_check_rcon(host: str, port: int, password: str, task: bool = False) -> bool:
     try:
-        with MCRcon(host, password, port=port):
+        with ThreadSafeMCRcon(host, password, port=port):
             return True
     except Exception:
         Logger.warning(f"RCON check failed for \"{host}:{port}\".", task=task)
