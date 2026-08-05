@@ -22,6 +22,8 @@
 import discord
 import asyncio
 import aiohttp
+import socket
+import ssl
 import os
 import re
 
@@ -54,8 +56,22 @@ class ThreadSafeMCRcon(MCRcon):
         self.timeout = 0
 
     def connect(self):
-        super().connect()
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Applied before connecting so it covers the TCP connect, the auth handshake and every read
         self.socket.settimeout(self.socket_timeout)
+
+        if self.tlsmode > 0:
+            ctx = ssl.create_default_context()
+
+            if self.tlsmode > 1:
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+
+            self.socket = ctx.wrap_socket(self.socket, server_hostname=self.host)
+
+        self.socket.connect((self.host, self.port))
+        self._send(3, self.password)
 
 # Check Minecraft host(s)
 async def check_rcon(task: bool = False) -> dict:
