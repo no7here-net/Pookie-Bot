@@ -23,9 +23,10 @@ import os
 from discord.ext import commands
 from discord import app_commands
 
+from utilities.config import config
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import config, is_verified, format_duration
+from utilities.helpers import is_verified, format_duration
 from utilities.interactions import VerificationView
 from utilities.minecraft import close_http_session
 

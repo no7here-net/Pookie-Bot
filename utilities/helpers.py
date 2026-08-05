@@ -18,9 +18,9 @@
 
 # Handle various misc. parts of bot
 # - Bot admin check
-# - Emoji finder
-# - HEX converter (for embed colours)
 # - Username fetcher
+# - Duration formatter
+# - Quarantine check
 # - Status checkers
 #   - Cloudflare & Google DNS checks for internet connectivity... I get the irony of it being a Discord bot ok
 #   - SSH access check
@@ -28,51 +28,13 @@
 import discord
 import asyncio
 import uuid
-import json
-import os
+
+import utilities.database as db
 
 from discord import app_commands
 
+from utilities.config import config, get_guild_config
 from utilities.output import Logger
-
-# Load static config
-def load_config():
-    path = os.environ.get("POOKIE_CONFIG", "config.json")
-    with open(path) as f:
-        return json.load(f)
-
-config = load_config()
-
-# Add a function to reload config
-def reload_config():
-    try:
-        # Load the new config into a temporary variable first
-        new_config = load_config()
-
-        # Check if the new config is empty (e.g., if the file was totally blank)
-        if not new_config:
-            Logger.warning("Config reload aborted: config.json is empty.")
-            return False
-
-        # Update config after passing check
-        config.clear()
-        config.update(new_config)
-
-        return True
-
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        # Catch missing files or broken JSON formatting, keeping the old config safe
-        Logger.error("Failed to reload config.json. The previous config has been kept until reboot. Check log.", str(e))
-        return False
-
-# =================
-# SCRIPT LEVEL DEFS
-# =================
-
-# DB import is here to prevent circular import crashes
-import utilities.database as db
-
-customisation = config.get("customisation") or {}
 
 # ===============
 # COMMAND HELPERS
@@ -110,21 +72,6 @@ async def is_quarantined(guild_id: int, user_id: int) -> bool | None:
         # Fail close
         Logger.warning(f"Failed to check quarantine status for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
         return None
-
-# Fetch emoji ID by name
-def get_emoji(name: str) -> str:
-    emojis = customisation.get("emojis") or {}
-    return emojis.get(name)
-
-# Fetch HEX colours and convert to integers for discord.py
-def get_colour(name: str) -> int:
-    colours = customisation.get("colours") or {}
-    value = colours.get(name)
-    return int(value if value else "2fbffd", 16)
-
-# Fetch server configs
-def get_guild_config(guild_id: int) -> dict:
-    return next((s for s in config.get("servers") or [] if s.get("guild_id") == guild_id), {}) or {}
 
 # Fetch username by using their Discord ID (useful for when someone has left server for example)
 async def fetch_username(client: discord.Client, user_id: int) -> str:
@@ -244,12 +191,3 @@ async def _ping_host(host: str) -> bool:
         except Exception:
             Logger.warning(f"Failed to kill background sub-process ping to \"{host}\". Did it spawn?")
         return False
-
-# Verify emojis are present and working
-for name in ["success", "warning", "error", "info"]:
-    customisation = config.get("customisation") or {}
-    emojis = customisation.get("emojis") or {}
-
-    if not emojis.get(name):
-        Logger.error(f"Failed to find emoji \"{name}\" in config.json.")
-        raise SystemExit(1)

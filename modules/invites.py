@@ -25,9 +25,10 @@ from discord.ext import commands, tasks
 
 import utilities.database as db
 
+from utilities.config import config, get_guild_config
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import config, fetch_username, get_guild_config, is_quarantined
+from utilities.helpers import fetch_username, is_quarantined
 from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending
 from utilities.interactions import VerificationView
 
