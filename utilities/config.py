@@ -26,6 +26,7 @@
 # Imports nothing from the project except the logger, to avoid circular import issues.
 
 import json
+import os
 
 from utilities.output import Logger
 

@@ -21,7 +21,7 @@
 
 import discord
 
-from utilities.helpers import get_emoji, get_colour
+from utilities.config import get_emoji, get_colour
 
 class Embeds:
     @staticmethod

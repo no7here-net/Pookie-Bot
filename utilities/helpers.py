@@ -28,13 +28,12 @@
 import discord
 import asyncio
 import uuid
-import os
 
 import utilities.database as db
 
 from discord import app_commands
 
-from utilities.config import config
+from utilities.config import config, get_guild_config
 from utilities.output import Logger
 
 # =================
