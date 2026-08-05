@@ -22,6 +22,8 @@
 import discord
 import asyncio
 import aiohttp
+import socket
+import ssl
 import os
 import re
 
