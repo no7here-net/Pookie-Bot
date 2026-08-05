@@ -22,7 +22,6 @@
 import discord
 import asyncio
 import aiohttp
-import uuid
 import os
 import re
 
@@ -33,7 +32,7 @@ from mcrcon import MCRcon
 import utilities.database as db
 
 from utilities.output import Logger
-from utilities.helpers import config, fetch_username
+from utilities.helpers import config, fetch_username, log_action
 
 # Prevents race conditions when processing two MC commands at the same time
 _mc_state_lock = asyncio.Lock()
@@ -318,7 +317,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                             await cur.execute("INSERT INTO mc_bans (mc_uuid, user_id, added_by_id, reason) VALUES (%s, %s, %s, %s)", (mc_uuid, user_id, added_by_id, reason,))
 
                             # Add to mod log
-                            await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_ban", reason,))
+                            log_action(guild_id, user_id, added_by_id, "mc_ban", reason, cur)
                         else:
                             Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) is blacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}), which is not connected to a Discord account.")
 
@@ -336,7 +335,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                         await cur.execute("DELETE FROM mc_bans WHERE mc_uuid = %s", (mc_uuid,))
 
                         if user_id:
-                            await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild_id, user_id, added_by_id, "mc_unban", reason,))
+                            log_action(guild_id, user_id, added_by_id, "mc_unban", reason, cur)
 
                     # Queries successful, send RCON command
                     if not await _execute_list_command("blacklist", action, mc_username):

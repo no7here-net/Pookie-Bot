@@ -24,13 +24,12 @@
 
 import aiomysql
 import discord
-import uuid
 
 from typing import Literal
 
 import utilities.database as db
 
-from utilities.helpers import fetch_username, get_guild_config, is_quarantined
+from utilities.helpers import fetch_username, get_guild_config, is_quarantined, log_action
 from utilities.output import Logger
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
@@ -275,7 +274,7 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
                 await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
                 await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
                 # Log the ban action using the bot's own ID as the added_by_id
-                await cur.execute("INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)", (str(uuid.uuid4()), guild.id, user_id, added_by_id, "ban", reason,))
+                log_action(guild.id, user_id, added_by_id, "ban", reason, cur)
     except Exception:
         Logger.warning(f"\"{username}\" (ID: {user_id}) was banned, but the database failed to update. Manual correction required.", task=task)
         return True
