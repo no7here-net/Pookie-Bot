@@ -26,8 +26,8 @@ import warnings
 import os
 import re
 
+from utilities.config import config
 from utilities.output import Logger
-from utilities.helpers import config
 
 # Global connection pool so other modules can access it
 conn_pool = None

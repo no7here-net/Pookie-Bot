@@ -23,7 +23,8 @@ import discord
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import get_emoji, is_admin, get_guild_config
+from utilities.config import get_guild_config, get_emoji
+from utilities.helpers import is_admin
 from utilities.invites import process_verification, process_ban
 
 class VerificationView(discord.ui.View):

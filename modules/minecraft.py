@@ -26,7 +26,8 @@ import utilities.database as db
 
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import config, is_admin
+from utilities.config import config
+from utilities.helpers import is_admin
 from utilities.minecraft import whitelist_logic, blacklist_logic, check_rcon, unwhitelist_user
 
 class Minecraft(commands.Cog):

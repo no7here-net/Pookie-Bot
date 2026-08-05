@@ -29,8 +29,9 @@ from typing import Literal
 
 import utilities.database as db
 
-from utilities.helpers import fetch_username, get_guild_config, is_quarantined, log_action
 from utilities.output import Logger
+from utilities.config import get_guild_config
+from utilities.helpers import fetch_username, is_quarantined, log_action
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
 async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove"], guild_id: int, user_id: int, added_by_id: int) -> dict:
