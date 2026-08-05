@@ -36,12 +36,6 @@ from discord import app_commands
 from utilities.config import config, get_guild_config
 from utilities.output import Logger
 
-# =================
-# SCRIPT LEVEL DEFS
-# =================
-
-customisation = config.get("customisation") or {}
-
 # ===============
 # COMMAND HELPERS
 # ===============

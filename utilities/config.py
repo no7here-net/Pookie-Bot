@@ -66,11 +66,13 @@ def get_guild_config(guild_id: int) -> dict:
 
 # Fetch emoji ID by name
 def get_emoji(name: str) -> str:
+    customisation = config.get("customisation") or {}
     emojis = customisation.get("emojis") or {}
     return emojis.get(name)
 
 # Fetch HEX colours and convert to integers for discord.py
 def get_colour(name: str) -> int:
+    customisation = config.get("customisation") or {}
     colours = customisation.get("colours") or {}
     value = colours.get(name)
     return int(value if value else "2fbffd", 16)
