@@ -187,7 +187,6 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         return False
 
     try:
-        # Delete from pending verifications in DB
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
                 # Remove & clear pending / preverified lists
@@ -199,7 +198,7 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
 
 # Accept verification logic for verification buttons
 async def process_verification(client: discord.Client, guild: discord.Guild, message_id: int):
-    # Fetch verification message ID
+    # Fetch user ID from message ID
     user_id = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
@@ -226,7 +225,7 @@ async def process_verification(client: discord.Client, guild: discord.Guild, mes
 
 # Decline / ban logic for verification buttons
 async def process_ban(client: discord.Client, guild: discord.Guild, message_id: int, added_by_id: int, reason: str):
-    # Fetch verification message ID
+    # Fetch user ID from message ID
     user_id = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
