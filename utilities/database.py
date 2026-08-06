@@ -20,9 +20,13 @@
 # Checks / creates database
 # Creates tables (if missing)
 # Creates global variable accessible to other files for cursor access
+# Handles shared queries used across modules:
+# - Quarantine check
+# - Moderation logging
 
 import aiomysql
 import warnings
+import uuid
 import os
 import re
 
@@ -209,6 +213,37 @@ async def init_db():
         raise SystemExit(1) from None
 
     Logger.info("Database tables verified.")
+
+# Check if a user is currently quarantined
+async def is_quarantined(guild_id: int, user_id: int) -> bool | None:
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("SELECT 1 FROM quarantine WHERE user_id = %s AND guild_id = %s LIMIT 1", (user_id, guild_id,))
+                return await cur.fetchone() is not None
+    except Exception as e:
+        # Fail close
+        Logger.warning(f"Failed to check quarantine status for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
+        return None
+
+# Logs a moderation action to the database - takes optional cursor to join caller's transaction
+async def log_action(guild_id: int, user_id: int, added_by_id: int, action: str, reason: str, cur=None) -> bool:
+    query = "INSERT INTO mod_logs (event_uuid, guild_id, user_id, added_by_id, action, reason) VALUES (%s, %s, %s, %s, %s, %s)"
+    params = (str(uuid.uuid4()), guild_id, user_id, added_by_id, action, reason,)
+
+    # Join the caller's transaction, so a rolled back action cannot leave its log behind
+    if cur is not None:
+        await cur.execute(query, params)
+        return True
+
+    try:
+        async with db.conn_pool.acquire() as conn:
+            async with conn.cursor() as own_cur:
+                await own_cur.execute(query, params)
+        return True
+    except Exception as e:
+        Logger.error(f"Failed to record the moderation action \"{action}\" for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
+        return False
 
 # Said massive warning
 def no_password_warning():

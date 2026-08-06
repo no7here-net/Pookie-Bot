@@ -35,7 +35,8 @@ import utilities.database as db
 
 from utilities.config import config
 from utilities.output import Logger
-from utilities.helpers import fetch_username, log_action
+from utilities.helpers import fetch_username,
+from utilities.database import log_action
 
 # Prevents race conditions when processing two MC commands at the same time
 _mc_state_lock = asyncio.Lock()
