@@ -23,6 +23,8 @@
 # Handles shared queries used across modules:
 # - Quarantine check
 # - Moderation logging
+# - Verification state cleanup
+# - Sweeper lookups
 
 import aiomysql
 import warnings
@@ -217,7 +219,7 @@ async def init_db():
 # Check if a user is currently quarantined
 async def is_quarantined(guild_id: int, user_id: int) -> bool | None:
     try:
-        async with db.conn_pool.acquire() as conn:
+        async with conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute("SELECT 1 FROM quarantine WHERE user_id = %s AND guild_id = %s LIMIT 1", (user_id, guild_id,))
                 return await cur.fetchone() is not None
@@ -237,7 +239,7 @@ async def log_action(guild_id: int, user_id: int, added_by_id: int, action: str,
         return True
 
     try:
-        async with db.conn_pool.acquire() as conn:
+        async with conn_pool.acquire() as conn:
             async with conn.cursor() as own_cur:
                 await own_cur.execute(query, params)
         return True
