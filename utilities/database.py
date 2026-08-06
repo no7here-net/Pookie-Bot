@@ -99,111 +99,111 @@ async def init_db():
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message=".*already exists.*")
 
-        async with conn_pool.acquire() as conn:
-            async with conn.cursor() as cur:
-                # 1. Pre-Verified Users
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS pre_verified (
-                        user_id BIGINT NOT NULL,
-                        guild_id BIGINT NOT NULL,
-                        added_by_id BIGINT NOT NULL,
-                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, guild_id)
-                    )
-                """)
+            async with conn_pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    # 1. Pre-Verified Users
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS pre_verified (
+                            user_id BIGINT NOT NULL,
+                            guild_id BIGINT NOT NULL,
+                            added_by_id BIGINT NOT NULL,
+                            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (user_id, guild_id)
+                        )
+                    """)
 
-                # 2. Pending Verifications
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS pending_verifications (
-                        user_id BIGINT NOT NULL,
-                        guild_id BIGINT NOT NULL,
-                        message_id BIGINT NOT NULL,
-                        join_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, guild_id)
-                    )
-                """)
+                    # 2. Pending Verifications
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS pending_verifications (
+                            user_id BIGINT NOT NULL,
+                            guild_id BIGINT NOT NULL,
+                            message_id BIGINT NOT NULL,
+                            join_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (user_id, guild_id)
+                        )
+                    """)
 
-                # 3. Minecraft Accounts Linking
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS mc_accounts (
-                        user_id BIGINT PRIMARY KEY,
-                        mc_uuid VARCHAR(36) NOT NULL UNIQUE,
-                        linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    # 3. Minecraft Accounts Linking
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS mc_accounts (
+                            user_id BIGINT PRIMARY KEY,
+                            mc_uuid VARCHAR(36) NOT NULL UNIQUE,
+                            linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
 
-                # 4. Minecraft Bans
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS mc_bans (
-                        mc_uuid VARCHAR(36) PRIMARY KEY,
-                        user_id BIGINT,
-                        added_by_id BIGINT NOT NULL,
-                        reason TEXT,
-                        banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    # 4. Minecraft Bans
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS mc_bans (
+                            mc_uuid VARCHAR(36) PRIMARY KEY,
+                            user_id BIGINT,
+                            added_by_id BIGINT NOT NULL,
+                            reason TEXT,
+                            banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
 
-                # 5. Discord Moderation Logs
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS mod_logs (
-                        event_uuid VARCHAR(36) PRIMARY KEY,
-                        guild_id BIGINT NOT NULL,
-                        user_id BIGINT NOT NULL,
-                        added_by_id BIGINT NOT NULL,
-                        action VARCHAR(50) NOT NULL,
-                        reason TEXT,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    # 5. Discord Moderation Logs
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS mod_logs (
+                            event_uuid VARCHAR(36) PRIMARY KEY,
+                            guild_id BIGINT NOT NULL,
+                            user_id BIGINT NOT NULL,
+                            added_by_id BIGINT NOT NULL,
+                            action VARCHAR(50) NOT NULL,
+                            reason TEXT,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
 
-                # 6. Message Logs (Year in Review)
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS message_logs (
-                        event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                        message_id BIGINT NOT NULL,
-                        user_id BIGINT NOT NULL,
-                        guild_id BIGINT NOT NULL,
-                        channel_id BIGINT NOT NULL,
-                        content TEXT NOT NULL,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    # 6. Message Logs (Year in Review)
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS message_logs (
+                            event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            message_id BIGINT NOT NULL,
+                            user_id BIGINT NOT NULL,
+                            guild_id BIGINT NOT NULL,
+                            channel_id BIGINT NOT NULL,
+                            content TEXT NOT NULL,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
 
-                # 7. Voice Channel Logs (Year in Review)
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS vc_logs (
-                        event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                        user_id BIGINT NOT NULL,
-                        guild_id BIGINT NOT NULL,
-                        channel_id BIGINT NOT NULL,
-                        action VARCHAR(10) NOT NULL,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    # 7. Voice Channel Logs (Year in Review)
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS vc_logs (
+                            event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            user_id BIGINT NOT NULL,
+                            guild_id BIGINT NOT NULL,
+                            channel_id BIGINT NOT NULL,
+                            action VARCHAR(10) NOT NULL,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
 
-                # 8. Media Logs (Uploads from Discord CDN)
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS media_history (
-                        event_uuid VARCHAR(36) PRIMARY KEY,
-                        user_id BIGINT NOT NULL,
-                        context VARCHAR(50) NOT NULL,
-                        reference_id BIGINT,
-                        original_filename VARCHAR(255) NOT NULL,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                    # 8. Media Logs (Uploads from Discord CDN)
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS media_history (
+                            event_uuid VARCHAR(36) PRIMARY KEY,
+                            user_id BIGINT NOT NULL,
+                            context VARCHAR(50) NOT NULL,
+                            reference_id BIGINT,
+                            original_filename VARCHAR(255) NOT NULL,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
 
-                # 9. Quarantines (Rather than checking mod logs)
-                await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS quarantine (
-                        user_id BIGINT NOT NULL,
-                        guild_id BIGINT NOT NULL,
-                        added_by_id BIGINT NOT NULL,
-                        reason TEXT,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, guild_id)
-                    )
-                """)
+                    # 9. Quarantines (Rather than checking mod logs)
+                    await cur.execute("""
+                        CREATE TABLE IF NOT EXISTS quarantine (
+                            user_id BIGINT NOT NULL,
+                            guild_id BIGINT NOT NULL,
+                            added_by_id BIGINT NOT NULL,
+                            reason TEXT,
+                            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            PRIMARY KEY (user_id, guild_id)
+                        )
+                    """)
     except Exception as e:
         Logger.error("Failed to create tables in the database. Check log.", str(e))
         raise SystemExit(1) from None
