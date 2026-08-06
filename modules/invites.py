@@ -27,8 +27,8 @@ from utilities.config import config, get_guild_config
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import fetch_username
-from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending, fetch_preverified_users, fetch_expired_pending
-from utilities.database import is_quarantined, clear_pending
+from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member
+from utilities.database import is_quarantined, clear_pending, fetch_join_state, register_pending, fetch_preverified_users, fetch_expired_pending
 from utilities.interactions import VerificationView
 
 class Invites(commands.Cog):
