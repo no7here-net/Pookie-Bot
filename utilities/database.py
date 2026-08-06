@@ -260,13 +260,9 @@ async def clear_pending(guild_id: int, user_id: int, cur=None) -> int:
             return own_cur.rowcount
 
 # Removes a user's pre-verification entry, returning the number of rows cleared - a count of 0 means there was nothing to remove
-async def clear_preverified(guild_id: int, user_id: int, cur=None) -> int:
+async def clear_preverified(guild_id: int, user_id: int, cur) -> int:
     query = "DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s"
     params = (user_id, guild_id,)
-
-    if cur is not None:
-        await cur.execute(query, params)
-        return cur.rowcount
 
     async with conn_pool.acquire() as conn:
         async with conn.cursor() as own_cur:
