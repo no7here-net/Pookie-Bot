@@ -272,8 +272,8 @@ async def clear_preverified(guild_id: int, user_id: int, cur=None) -> int:
 
     async with conn_pool.acquire() as conn:
         async with conn.cursor() as own_cur:
-            await cur.execute(query, params)
-            return cur.rowcount
+            await own_cur.execute(query, params)
+            return own_cur.rowcount
 
 # Clears both verification tables for a user, used once they are verified or banned and neither entry applies any more
 async def clear_verification_state(guild_id: int, user_id: int, cur=None):
