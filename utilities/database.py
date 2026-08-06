@@ -310,6 +310,13 @@ async def fetch_expired_pending() -> tuple:
             """)
             return await cur.fetchall()
 
+# Fetch every Discord account with a linked Minecraft account, for the whitelist sweeper
+async def fetch_linked_users() -> tuple:
+    async with conn_pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT user_id FROM mc_accounts")
+            return await cur.fetchall()
+
 # Said massive warning
 def no_password_warning():
     Logger.warning("############################################################################################")

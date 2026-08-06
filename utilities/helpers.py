@@ -29,8 +29,6 @@ import discord
 import asyncio
 import uuid
 
-import utilities.database as db
-
 from discord import app_commands
 
 from utilities.config import config, get_guild_config

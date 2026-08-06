@@ -23,8 +23,6 @@ from typing import Literal
 from discord import app_commands
 from discord.ext import commands, tasks
 
-import utilities.database as db
-
 from utilities.config import config, get_guild_config
 from utilities.embeds import Embeds
 from utilities.output import Logger

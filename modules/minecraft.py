@@ -22,13 +22,11 @@ from typing import Literal
 from discord import app_commands
 from discord.ext import commands, tasks
 
-import utilities.database as db
-
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.config import config
 from utilities.helpers import is_admin
-from utilities.minecraft import whitelist_logic, blacklist_logic, check_rcon, unwhitelist_user
+from utilities.minecraft import whitelist_logic, blacklist_logic, check_rcon, unwhitelist_user, fetch_linked_users
 
 class Minecraft(commands.Cog):
     def __init__(self, bot):
@@ -174,10 +172,7 @@ class Minecraft(commands.Cog):
 
             # Fetch all linked accounts
             try:
-                async with db.conn_pool.acquire() as conn:
-                    async with conn.cursor() as cur:
-                        await cur.execute("SELECT user_id FROM mc_accounts")
-                        linked_users = await cur.fetchall()
+                linked_users = await fetch_linked_users()
             except Exception:
                 Logger.warning("Whitelist sweeper failed to fetch linked accounts from the database.", task=True)
                 return
