@@ -46,10 +46,8 @@ async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove
                 if action == "Add":
                     await cur.execute("INSERT INTO pre_verified (user_id, guild_id, added_by_id) VALUES (%s, %s, %s)", (user_id, guild_id, added_by_id,))
                 else:
-                    await clear_preverified(guild_id, user_id, cur=cur)
-
                     # A rowcount of 0 means there was nothing to delete
-                    if cur.rowcount == 0:
+                    if await clear_preverified(guild_id, user_id, cur=cur) == 0:
                         Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to remove pre-verification for \"{username}\" (ID: {user_id}) as they are not in the pre_verified table.")
 
                         return {
