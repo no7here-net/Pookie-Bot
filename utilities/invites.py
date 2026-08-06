@@ -200,13 +200,12 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
 # Accept verification logic for verification buttons
 async def process_verification(client: discord.Client, guild: discord.Guild, message_id: int):
     # Fetch verification message ID
-    result = await fetch_pending_by_message(message_id)
+    user_id = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
-    if not result:
+    if not user_id:
         return (None, None)
 
-    user_id = result[0]
     username = await fetch_username(client, user_id)
 
     try:
@@ -228,13 +227,12 @@ async def process_verification(client: discord.Client, guild: discord.Guild, mes
 # Decline / ban logic for verification buttons
 async def process_ban(client: discord.Client, guild: discord.Guild, message_id: int, added_by_id: int, reason: str):
     # Fetch verification message ID
-    result = await fetch_pending_by_message(message_id)
+    user_id = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
-    if not result:
+    if not user_id:
         return (None, None)
 
-    user_id = result[0]
     username = await fetch_username(client, user_id)
 
     # Ban the user
