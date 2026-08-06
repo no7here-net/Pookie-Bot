@@ -32,7 +32,7 @@ import utilities.database as db
 from utilities.output import Logger
 from utilities.config import get_guild_config
 from utilities.helpers import fetch_username,
-from utilities.database import is_quarantined, log_action
+from utilities.database import is_quarantined, log_action, clear_pending
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
 async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove"], guild_id: int, user_id: int, added_by_id: int) -> dict:
@@ -193,7 +193,7 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
                 # Remove from pending list
-                await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, member.guild.id,))
+                clear_pending(user_id, member.guild.id, cur=cur)
                 # Clear from pre-verified
                 await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, member.guild.id,))
     except Exception:
@@ -273,7 +273,7 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
-                await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
+                clear_pending(user_id, guild.id, cur=cur)
                 await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
                 # Log the ban action using the bot's own ID as the added_by_id
                 await log_action(guild.id, user_id, added_by_id, "ban", reason, cur)

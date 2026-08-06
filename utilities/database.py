@@ -245,6 +245,20 @@ async def log_action(guild_id: int, user_id: int, added_by_id: int, action: str,
         Logger.error(f"Failed to record the moderation action \"{action}\" for user (ID: {user_id}) in server (ID: {guild_id}). Check log.", str(e))
         return False
 
+# Removes a user's pending verification entry, returning the number of rows cleared - takes optional cursor to join caller's transaction
+async def clear_pending(guild_id: int, user_id: int, cur=None) -> int:
+    query = "DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s"
+    params = (user_id, guild_id,)
+
+    if cur is not None:
+        await cur.execute(query, params)
+        return cur.rowcount
+
+    async with conn_pool.acquire() as conn:
+        async with conn.cursor() as own_cur:
+            await own_cur.execute(query, params)
+            return own_cur.rowcount
+
 # Said massive warning
 def no_password_warning():
     Logger.warning("############################################################################################")
