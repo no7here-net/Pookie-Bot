@@ -31,7 +31,7 @@ import utilities.database as db
 
 from utilities.output import Logger
 from utilities.config import get_guild_config
-from utilities.helpers import fetch_username,
+from utilities.helpers import fetch_username
 from utilities.database import is_quarantined, log_action, clear_preverified, clear_verification_state, fetch_pending_by_message
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
