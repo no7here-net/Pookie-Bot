@@ -46,7 +46,7 @@ async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove
                 if action == "Add":
                     await cur.execute("INSERT INTO pre_verified (user_id, guild_id, added_by_id) VALUES (%s, %s, %s)", (user_id, guild_id, added_by_id,))
                 else:
-                    clear_preverified(guild_id, user_id, cur=cur)
+                    await clear_preverified(guild_id, user_id, cur=cur)
 
                     # A rowcount of 0 means there was nothing to delete
                     if cur.rowcount == 0:
@@ -193,9 +193,9 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
                 # Remove from pending list
-                clear_pending(member.guild.id, user_id, cur=cur)
+                await clear_pending(member.guild.id, user_id, cur=cur)
                 # Clear from pre-verified
-                clear_preverified(member.guild.id, user_id, cur=cur)
+                await clear_preverified(member.guild.id, user_id, cur=cur)
     except Exception:
         # Incase database update fails
         Logger.warning(f"\"{username}\" (ID: {user_id}) received the verified role but database failed to update. Manual correction required.", task=task)
@@ -273,8 +273,8 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
-                clear_pending(guild.id, user_id, cur=cur)
-                clear_preverified(guild.id, user_id, cur=cur)
+                await clear_pending(guild.id, user_id, cur=cur)
+                await clear_preverified(guild.id, user_id, cur=cur)
                 # Log the ban action using the bot's own ID as the added_by_id
                 await log_action(guild.id, user_id, added_by_id, "ban", reason, cur)
     except Exception:

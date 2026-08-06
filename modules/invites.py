@@ -375,7 +375,7 @@ class Invites(commands.Cog):
                         if any(r.id == role.id for r in member.roles):
                             # Enable Task log mode via True
                             Logger.info(f"\"{username}\" (ID: {user_id}) was manually verified, ignoring & removing.", task=True)
-                            clear_pending(guild_id, user_id)
+                            await clear_pending(guild_id, user_id)
                             continue
                     except discord.NotFound:
                         # This means they've likely left the server, so will proceed with standard logic.
@@ -417,7 +417,7 @@ class Invites(commands.Cog):
                 else:
                     # Clear the orphaned entries where bot is no longer in guild
                     Logger.info(f"\"{username}\" (ID: {user_id}) was removed from database as bot is no longer in server (ID: {guild_id}).", task=True)
-                    clear_pending(guild_id, user_id)
+                    await clear_pending(guild_id, user_id)
         except Exception as e:
             Logger.warning("A critical error occurred whilst running the verification sweeper task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
