@@ -31,7 +31,8 @@ import utilities.database as db
 
 from utilities.output import Logger
 from utilities.config import get_guild_config
-from utilities.helpers import fetch_username, is_quarantined, log_action
+from utilities.helpers import fetch_username
+from utilities.database import is_quarantined, log_action, clear_preverified, clear_verification_state, fetch_pending_by_message
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
 async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove"], guild_id: int, user_id: int, added_by_id: int) -> dict:
@@ -45,10 +46,8 @@ async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove
                 if action == "Add":
                     await cur.execute("INSERT INTO pre_verified (user_id, guild_id, added_by_id) VALUES (%s, %s, %s)", (user_id, guild_id, added_by_id,))
                 else:
-                    await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild_id,))
-
                     # A rowcount of 0 means there was nothing to delete
-                    if cur.rowcount == 0:
+                    if await clear_preverified(guild_id, user_id, cur=cur) == 0:
                         Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) failed to remove pre-verification for \"{username}\" (ID: {user_id}) as they are not in the pre_verified table.")
 
                         return {
@@ -188,13 +187,10 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         return False
 
     try:
-        # Delete from pending verifications in DB
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
-                # Remove from pending list
-                await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, member.guild.id,))
-                # Clear from pre-verified
-                await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, member.guild.id,))
+                # Remove & clear pending / preverified lists
+                await clear_verification_state(member.guild.id, user_id, cur=cur)
     except Exception:
         # Incase database update fails
         Logger.warning(f"\"{username}\" (ID: {user_id}) received the verified role but database failed to update. Manual correction required.", task=task)
@@ -202,17 +198,13 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
 
 # Accept verification logic for verification buttons
 async def process_verification(client: discord.Client, guild: discord.Guild, message_id: int):
-    async with db.conn_pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            # Fetch verification message ID
-            await cur.execute("SELECT user_id FROM pending_verifications WHERE message_id = %s", (message_id,))
-            result = await cur.fetchone()
+    # Fetch user ID from message ID
+    user_id = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
-    if not result:
+    if not user_id:
         return (None, None)
 
-    user_id = result[0]
     username = await fetch_username(client, user_id)
 
     try:
@@ -233,17 +225,13 @@ async def process_verification(client: discord.Client, guild: discord.Guild, mes
 
 # Decline / ban logic for verification buttons
 async def process_ban(client: discord.Client, guild: discord.Guild, message_id: int, added_by_id: int, reason: str):
-    async with db.conn_pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            # Fetch verification message ID
-            await cur.execute("SELECT user_id FROM pending_verifications WHERE message_id = %s", (message_id,))
-            result = await cur.fetchone()
+    # Fetch user ID from message ID
+    user_id = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
-    if not result:
+    if not user_id:
         return (None, None)
 
-    user_id = result[0]
     username = await fetch_username(client, user_id)
 
     # Ban the user
@@ -268,12 +256,11 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
         Logger.warning(f"\"{username}\" (ID: {user_id}) could not be banned.", task=task)
         return False
 
-    # Clear from pending list & add discord mod log
+    # Clear from pending list, pre-verified & add discord mod log
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
-                await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
-                await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
+                await clear_verification_state(guild.id, user_id, cur=cur)
                 # Log the ban action using the bot's own ID as the added_by_id
                 await log_action(guild.id, user_id, added_by_id, "ban", reason, cur)
     except Exception:

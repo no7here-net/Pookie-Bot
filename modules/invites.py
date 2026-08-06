@@ -23,13 +23,12 @@ from typing import Literal
 from discord import app_commands
 from discord.ext import commands, tasks
 
-import utilities.database as db
-
 from utilities.config import config, get_guild_config
 from utilities.embeds import Embeds
 from utilities.output import Logger
-from utilities.helpers import fetch_username, is_quarantined
+from utilities.helpers import fetch_username
 from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending
+from utilities.database import is_quarantined, clear_pending, fetch_preverified_users, fetch_expired_pending
 from utilities.interactions import VerificationView
 
 class Invites(commands.Cog):
@@ -304,10 +303,7 @@ class Invites(commands.Cog):
                         Logger.warning(f"Failed to fetch the full member list for \"{guild.name}\" (ID: {guild.id}). Pre-verification catch-up may be incomplete this run.", task=True)
 
                 try:
-                    async with db.conn_pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute("SELECT user_id, added_by_id FROM pre_verified WHERE guild_id = %s", (guild_id,))
-                            preverified_users = await cur.fetchall()
+                    preverified_users = await fetch_preverified_users(guild_id)
                 except Exception:
                     Logger.warning("Verification sweeper failed to fetch the pre-verified list from the database.", task=True)
                     preverified_users = ()
@@ -333,16 +329,8 @@ class Invites(commands.Cog):
             # PHASE 2: BAN SWEEP
             # ==================
 
-            async with db.conn_pool.acquire() as conn:
-                async with conn.cursor() as cur:
-                    # Fetch everyone whose join_time was more than 24 hours ago, excluding anyone in pre-verified table
-                    await cur.execute("""
-                        SELECT pv.user_id, pv.guild_id, pv.message_id
-                        FROM pending_verifications pv
-                        LEFT JOIN pre_verified p ON p.user_id = pv.user_id AND p.guild_id = pv.guild_id
-                        WHERE pv.join_time < NOW() - INTERVAL 24 HOUR AND p.user_id IS NULL
-                    """)
-                    expired_users = await cur.fetchall()
+            # Fetch everyone whose join_time was more than 24 hours ago, excluding anyone in pre-verified table
+            expired_users = await fetch_expired_pending()
 
             # Loop through all the expired users and ban
             for entry in expired_users:
@@ -374,10 +362,7 @@ class Invites(commands.Cog):
                         if any(r.id == role.id for r in member.roles):
                             # Enable Task log mode via True
                             Logger.info(f"\"{username}\" (ID: {user_id}) was manually verified, ignoring & removing.", task=True)
-
-                            async with db.conn_pool.acquire() as conn:
-                                async with conn.cursor() as cur:
-                                    await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, guild_id,))
+                            await clear_pending(guild_id, user_id)
                             continue
                     except discord.NotFound:
                         # This means they've likely left the server, so will proceed with standard logic.
@@ -419,10 +404,7 @@ class Invites(commands.Cog):
                 else:
                     # Clear the orphaned entries where bot is no longer in guild
                     Logger.info(f"\"{username}\" (ID: {user_id}) was removed from database as bot is no longer in server (ID: {guild_id}).", task=True)
-
-                    async with db.conn_pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute("DELETE FROM pending_verifications WHERE user_id = %s AND guild_id = %s", (user_id, guild_id,))
+                    await clear_pending(guild_id, user_id)
         except Exception as e:
             Logger.warning("A critical error occurred whilst running the verification sweeper task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
