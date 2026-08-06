@@ -32,7 +32,7 @@ import utilities.database as db
 from utilities.output import Logger
 from utilities.config import get_guild_config
 from utilities.helpers import fetch_username,
-from utilities.database import is_quarantined, log_action, clear_pending, clear_preverified
+from utilities.database import is_quarantined, log_action, clear_preverified, clear_verification_state, fetch_pending_by_message
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
 async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove"], guild_id: int, user_id: int, added_by_id: int) -> dict:
@@ -192,10 +192,8 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         # Delete from pending verifications in DB
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
-                # Remove from pending list
-                await clear_pending(member.guild.id, user_id, cur=cur)
-                # Clear from pre-verified
-                await clear_preverified(member.guild.id, user_id, cur=cur)
+                # Remove & clear pending / preverified lists
+                await clear_verification_state(member.guild.id, user_id, cur=cur)
     except Exception:
         # Incase database update fails
         Logger.warning(f"\"{username}\" (ID: {user_id}) received the verified role but database failed to update. Manual correction required.", task=task)
@@ -203,11 +201,8 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
 
 # Accept verification logic for verification buttons
 async def process_verification(client: discord.Client, guild: discord.Guild, message_id: int):
-    async with db.conn_pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            # Fetch verification message ID
-            await cur.execute("SELECT user_id FROM pending_verifications WHERE message_id = %s", (message_id,))
-            result = await cur.fetchone()
+    # Fetch verification message ID
+    result = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
     if not result:
@@ -234,11 +229,8 @@ async def process_verification(client: discord.Client, guild: discord.Guild, mes
 
 # Decline / ban logic for verification buttons
 async def process_ban(client: discord.Client, guild: discord.Guild, message_id: int, added_by_id: int, reason: str):
-    async with db.conn_pool.acquire() as conn:
-        async with conn.cursor() as cur:
-            # Fetch verification message ID
-            await cur.execute("SELECT user_id FROM pending_verifications WHERE message_id = %s", (message_id,))
-            result = await cur.fetchone()
+    # Fetch verification message ID
+    result = await fetch_pending_by_message(message_id)
 
     # If it doesn't exist, return none
     if not result:
@@ -273,8 +265,7 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
-                await clear_pending(guild.id, user_id, cur=cur)
-                await clear_preverified(guild.id, user_id, cur=cur)
+                await clear_verification_state(guild.id, user_id, cur=cur)
                 # Log the ban action using the bot's own ID as the added_by_id
                 await log_action(guild.id, user_id, added_by_id, "ban", reason, cur)
     except Exception:

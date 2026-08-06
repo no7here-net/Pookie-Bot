@@ -269,6 +269,47 @@ async def clear_preverified(guild_id: int, user_id: int, cur) -> int:
             await own_cur.execute(query, params)
             return own_cur.rowcount
 
+# Clears both verification tables for a user, used once they are verified or banned and neither entry applies any more
+async def clear_verification_state(guild_id: int, user_id: int, cur=None):
+    if cur is not None:
+        await clear_pending(guild_id, user_id, cur)
+        await clear_preverified(guild_id, user_id, cur)
+        return
+
+    # Both deletes share one connection so the caller only borrows from the pool once
+    async with conn_pool.acquire() as conn:
+        async with conn.cursor() as own_cur:
+            await clear_pending(guild_id, user_id, own_cur)
+            await clear_preverified(guild_id, user_id, own_cur)
+
+# Resolves the user behind a verification message, or None if the message is no longer pending
+async def fetch_pending_by_message(message_id: int) -> int | None:
+    async with conn_pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT user_id FROM pending_verifications WHERE message_id = %s", (message_id,))
+            result = await cur.fetchone()
+
+    return result[0] if result else None
+
+# Fetch every pre-verified user in a guild, for the verification sweeper
+async def fetch_preverified_users(guild_id: int) -> tuple:
+    async with conn_pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT user_id, added_by_id FROM pre_verified WHERE guild_id = %s", (guild_id,))
+            return await cur.fetchall()
+
+# Fetch everyone whose join_time was more than 24 hours ago, excluding anyone in the pre-verified table
+async def fetch_expired_pending() -> tuple:
+    async with conn_pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("""
+                SELECT pv.user_id, pv.guild_id, pv.message_id
+                FROM pending_verifications pv
+                LEFT JOIN pre_verified p ON p.user_id = pv.user_id AND p.guild_id = pv.guild_id
+                WHERE pv.join_time < NOW() - INTERVAL 24 HOUR AND p.user_id IS NULL
+            """)
+            return await cur.fetchall()
+
 # Said massive warning
 def no_password_warning():
     Logger.warning("############################################################################################")

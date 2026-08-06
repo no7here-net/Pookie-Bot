@@ -29,7 +29,7 @@ from utilities.config import config, get_guild_config
 from utilities.embeds import Embeds
 from utilities.output import Logger
 from utilities.helpers import fetch_username,
-from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending
+from utilities.invites import ban_user, preverify_logic, preverify_list, verify_member, fetch_join_state, register_pending, fetch_preverified_users, fetch_expired_pending
 from utilities.database import is_quarantined, clear_pending
 from utilities.interactions import VerificationView
 
@@ -305,10 +305,7 @@ class Invites(commands.Cog):
                         Logger.warning(f"Failed to fetch the full member list for \"{guild.name}\" (ID: {guild.id}). Pre-verification catch-up may be incomplete this run.", task=True)
 
                 try:
-                    async with db.conn_pool.acquire() as conn:
-                        async with conn.cursor() as cur:
-                            await cur.execute("SELECT user_id, added_by_id FROM pre_verified WHERE guild_id = %s", (guild_id,))
-                            preverified_users = await cur.fetchall()
+                    preverified_users = await fetch_preverified_users(guild_id)
                 except Exception:
                     Logger.warning("Verification sweeper failed to fetch the pre-verified list from the database.", task=True)
                     preverified_users = ()
@@ -334,16 +331,8 @@ class Invites(commands.Cog):
             # PHASE 2: BAN SWEEP
             # ==================
 
-            async with db.conn_pool.acquire() as conn:
-                async with conn.cursor() as cur:
-                    # Fetch everyone whose join_time was more than 24 hours ago, excluding anyone in pre-verified table
-                    await cur.execute("""
-                        SELECT pv.user_id, pv.guild_id, pv.message_id
-                        FROM pending_verifications pv
-                        LEFT JOIN pre_verified p ON p.user_id = pv.user_id AND p.guild_id = pv.guild_id
-                        WHERE pv.join_time < NOW() - INTERVAL 24 HOUR AND p.user_id IS NULL
-                    """)
-                    expired_users = await cur.fetchall()
+            # Fetch everyone whose join_time was more than 24 hours ago, excluding anyone in pre-verified table
+            expired_users = await fetch_expired_pending()
 
             # Loop through all the expired users and ban
             for entry in expired_users:
