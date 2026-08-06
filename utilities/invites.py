@@ -193,7 +193,7 @@ async def verify_member(member: discord.Member, task: bool = False) -> bool:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
                 # Remove from pending list
-                clear_pending(user_id, member.guild.id, cur=cur)
+                clear_pending(member.guild.id, user_id, cur=cur)
                 # Clear from pre-verified
                 await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, member.guild.id,))
     except Exception:
@@ -273,7 +273,7 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
-                clear_pending(user_id, guild.id, cur=cur)
+                clear_pending(guild.id, user_id, cur=cur)
                 await cur.execute("DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s", (user_id, guild.id,))
                 # Log the ban action using the bot's own ID as the added_by_id
                 await log_action(guild.id, user_id, added_by_id, "ban", reason, cur)
