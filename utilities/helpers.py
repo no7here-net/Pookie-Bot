@@ -27,7 +27,6 @@
 
 import discord
 import asyncio
-import uuid
 
 from discord import app_commands
 

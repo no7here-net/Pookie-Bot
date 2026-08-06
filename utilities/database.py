@@ -262,27 +262,27 @@ async def clear_pending(guild_id: int, user_id: int, cur=None) -> int:
             return own_cur.rowcount
 
 # Removes a user's pre-verification entry, returning the number of rows cleared - a count of 0 means there was nothing to remove
-async def clear_preverified(guild_id: int, user_id: int, cur) -> int:
+async def clear_preverified(guild_id: int, user_id: int) -> int:
     query = "DELETE FROM pre_verified WHERE user_id = %s AND guild_id = %s"
     params = (user_id, guild_id,)
 
     async with conn_pool.acquire() as conn:
-        async with conn.cursor() as own_cur:
-            await own_cur.execute(query, params)
-            return own_cur.rowcount
+        async with conn.cursor() as cur:
+            await cur.execute(query, params)
+            return cur.rowcount
 
 # Clears both verification tables for a user, used once they are verified or banned and neither entry applies any more
 async def clear_verification_state(guild_id: int, user_id: int, cur=None):
     if cur is not None:
         await clear_pending(guild_id, user_id, cur)
-        await clear_preverified(guild_id, user_id, cur)
+        await clear_preverified(guild_id, user_id)
         return
 
     # Both deletes share one connection so the caller only borrows from the pool once
     async with conn_pool.acquire() as conn:
         async with conn.cursor() as own_cur:
             await clear_pending(guild_id, user_id, own_cur)
-            await clear_preverified(guild_id, user_id, own_cur)
+            await clear_preverified(guild_id, user_id)
 
 # Resolves the user behind a verification message, or None if the message is no longer pending
 async def fetch_pending_by_message(message_id: int) -> int | None:
