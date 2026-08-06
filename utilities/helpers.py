@@ -20,7 +20,6 @@
 # - Bot admin check
 # - Username fetcher
 # - Duration formatter
-# - Quarantine check
 # - Status checkers
 #   - Cloudflare & Google DNS checks for internet connectivity... I get the irony of it being a Discord bot ok
 #   - SSH access check

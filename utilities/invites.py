@@ -257,7 +257,7 @@ async def ban_user(client: discord.Client, guild: discord.Guild, user_id: int, u
         Logger.warning(f"\"{username}\" (ID: {user_id}) could not be banned.", task=task)
         return False
 
-    # Clear from pending list & add discord mod log
+    # Clear from pending list, pre-verified & add discord mod log
     try:
         async with db.conn_pool.acquire() as conn:
             async with conn.cursor() as cur:
