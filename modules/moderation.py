@@ -44,10 +44,10 @@ class Moderation(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         try:
             if enable_embed:
-                embed = discord.Embed(description=str(message), color=get_colour("info"))
+                embed = discord.Embed(description=message, color=get_colour("info"))
                 await channel.send(embed=embed)
             else:
-                await channel.send(str(message))
+                await channel.send(message)
             embed = Embeds.success(f"Message sent to <#{channel.id}>.")
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception:
@@ -56,7 +56,7 @@ class Moderation(commands.Cog):
                 embed = Embeds.error(f"Failed to send message to <#{channel.id}>.")
                 await interaction.followup.send(embed=embed, ephemeral=True)
             except Exception:
-                Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to send an echo but an exception occured whilst processing and failed to respond.")
+                Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to send an echo but an exception occurred whilst processing and failed to respond.")
         return
 
 async def setup(bot):
