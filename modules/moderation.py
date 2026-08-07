@@ -22,8 +22,10 @@ from typing import Literal
 from discord import app_commands
 from discord.ext import commands
 
-from utilities.config import get_colour
 from utilities.embeds import Embeds
+from utilities.output import Logger
+from utilities.config import get_colour
+from utilities.helpers import is_admin
 
 class Moderation(commands.Cog):
     def __init__(self, bot):
