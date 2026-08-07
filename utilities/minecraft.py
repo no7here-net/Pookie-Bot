@@ -44,6 +44,9 @@ _mc_state_lock = asyncio.Lock()
 # Shared HTTP session for all Mojang API / avatar lookups
 _http_session = None
 
+# List of hosts that have already been detected as having issues
+_rcon_failure_logged = set()
+
 # MCRcon variant that is safe to use off the main thread
 class ThreadSafeMCRcon(MCRcon):
     def __init__(self, host: str, password: str, port: int = 25575, tlsmode: int = 0, timeout: int = 5):
@@ -702,5 +705,9 @@ def _sync_check_rcon(host: str, port: int, password: str, command: str = None, t
             return True
     except Exception:
         if target not in _rcon_failure_logged:
+            # Add server to list of failed servers
+            _rcon_failure_logged.add(target)
+
+            # Send a warning to the log file / terminal
             Logger.warning(f"RCON check failed for \"{target}\".", task=task)
         return False
