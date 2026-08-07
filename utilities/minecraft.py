@@ -465,7 +465,7 @@ async def unwhitelist_user(client: discord.Client, user_id: int, context: str, t
                     await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s", (user_id,))
 
                     # allow_missing tolerates the account already being gone server-side, as the goal state is "not whitelisted"
-                    if not await _execute_list_command("whitelist", "Remove", target, allow_missing=True):
+                    if not await _execute_list_command("whitelist", "remove", target, allow_missing=True):
                         Logger.warning(f"\"{username}\" (ID: {user_id}) could not have their Minecraft account \"{mc_username or "unknown"}\" (UUID: {mc_uuid}) removed from the whitelist ({context}). Manual correction required.", task=task)
                         await conn.rollback()
                         return False
