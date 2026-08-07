@@ -117,7 +117,7 @@ async def check_rcon(task: bool = False) -> dict:
         server_names.append(name)
 
         # Queue a background task using internal rcon function
-        rcon_tasks.append(asyncio.to_thread(_sync_check_rcon, info.get("address"), info.get("rcon_port"), os.environ.get(env_key), task=task))
+        rcon_tasks.append(asyncio.to_thread(_sync_check_rcon, info.get("address"), info.get("rcon_port"), os.environ.get(env_key), command=info.get("health_command"), timeout=info.get("health_timeout", 5), task=task))
 
     # Run RCON connections simultaneously
     results = await asyncio.gather(*rcon_tasks)
@@ -686,10 +686,21 @@ def _sync_send_rcon(host: str, port: int, password: str, command: str, task: boo
         return "ERROR"
 
 # Internal RCON helper function
-def _sync_check_rcon(host: str, port: int, password: str, task: bool = False) -> bool:
+def _sync_check_rcon(host: str, port: int, password: str, command: str = None, timeout: int = 5, task: bool = False) -> bool:
+    target = f"{host}:{port}"
     try:
-        with ThreadSafeMCRcon(host, password, port=port):
+        with ThreadSafeMCRcon(host, password, port=port, timeout=timeout) as mcr:
+            # If there is no command, a successful auth is the check
+            if command:
+                # Prevent a somewhat alive server causing the bot to hang
+                mcr.socket.settimeout(timeout)
+
+                # Reply is deliberately not parsed, any response proves it is working
+                mcr.command(command)
+
+            _rcon_failure_logged.discard(target)
             return True
     except Exception:
-        Logger.warning(f"RCON check failed for \"{host}:{port}\".", task=task)
+        if target not in _rcon_failure_logged:
+            Logger.warning(f"RCON check failed for \"{target}\".", task=task)
         return False

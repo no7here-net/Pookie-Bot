@@ -29,25 +29,29 @@
                 "address": "roubaix.no7here.net",
                 "game_port": 25565,
                 "rcon_port": 25575,
-                "rcon_password": "ENV_RCON_PASSWORD"
+                "rcon_password": "ENV_RCON_PASSWORD",
+                "health_command": "glist"
             },
             "survival": {
                 "address": "roubaix.no7here.net",
                 "game_port": 30067,
                 "rcon_port": 25576,
-                "rcon_password": "ENV_RCON_PASSWORD"
+                "rcon_password": "ENV_RCON_PASSWORD",
+                "health_command": "list"
             },
             "creative": {
                 "address": "roubaix.no7here.net",
                 "game_port": 30068,
                 "rcon_port": 25577,
-                "rcon_password": "ENV_RCON_PASSWORD"
+                "rcon_password": "ENV_RCON_PASSWORD",
+                "health_command": "list"
             },
             "redstone": {
                 "address": "roubaix.no7here.net",
                 "game_port": 30069,
                 "rcon_port": 25578,
-                "rcon_password": "ENV_RCON_PASSWORD"
+                "rcon_password": "ENV_RCON_PASSWORD",
+                "health_command": "list"
             }
         }
     },
