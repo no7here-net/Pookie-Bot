@@ -33,7 +33,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name="echo", description="Echos a message as Pookie Bot.")
     @app_commands.describe(message="What message you want Pookie Bot to send.", channel="Which channel you want Pookie Bot to send it in.", embed="Whether you want Pookie Bot to place it in an embed.")
     @app_commands.rename(enable_embed="embed")
-    async def echo(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel, enable_embed: bool):
+    async def echo(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel, enable_embed: bool = True):
         # Require bot admin / server admin perms to run echo command
         if not (interaction.user.guild_permissions.administrator or is_admin(interaction.user.id)):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to send an echo but was blocked as they do not have permission.")
