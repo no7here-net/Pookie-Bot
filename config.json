@@ -20,7 +20,7 @@
         "general": false,
         "invites": true,
         "minecraft": true,
-        "moderation": false,
+        "moderation": true,
         "stats": false
     },
     "minecraft": {
