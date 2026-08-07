@@ -48,7 +48,7 @@ class Minecraft(commands.Cog):
     @app_commands.command(name="whitelist", description="Add or remove an account from the Minecraft server whitelist.")
     @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the whitelist.")
     @app_commands.rename(mc_username="username")
-    async def whitelist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str):
+    async def whitelist(self, interaction: discord.Interaction, action: Literal["add", "remove"], mc_username: str):
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
@@ -63,7 +63,7 @@ class Minecraft(commands.Cog):
             return
 
         # If successful, create fancy embed
-        if action == "Add":
+        if action == "add":
             embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) linked & whitelisted.")
         else:
             embed = Embeds.success(f"`{mc_username}` (`{result.get("uuid")}`) has been unlinked & removed from the whitelist.")
@@ -77,7 +77,7 @@ class Minecraft(commands.Cog):
     @app_commands.command(name="blacklist", description="Add or remove an account from the Minecraft server blacklist.")
     @app_commands.describe(mc_username="Minecraft username to target.", action="Whether to add or remove the account from the blacklist.", reason="Why you're taking this action.")
     @app_commands.rename(mc_username="username")
-    async def blacklist(self, interaction: discord.Interaction, action: Literal["Add", "Remove"], mc_username: str, reason: str):
+    async def blacklist(self, interaction: discord.Interaction, action: Literal["add", "remove"], mc_username: str, reason: str):
         # Require bot admin / user ban perms to run ban action
         if not (interaction.user.guild_permissions.ban_members or is_admin(interaction.user.id)):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} the Minecraft account \"{mc_username}\" for the reason \"{reason}\" but was blocked as they do not have permission.")
@@ -99,7 +99,7 @@ class Minecraft(commands.Cog):
                 return
 
             # Build description per action to make wording match what happened
-            if action == "Add":
+            if action == "add":
                 discord_link = f" Linked Discord account <@{result.get('user_id')}> was unlinked & removed from the whitelist." if result.get("user_id") else ""
 
                 description = f"`{mc_username}` (`{result.get('uuid')}`) blacklisted.{discord_link}"

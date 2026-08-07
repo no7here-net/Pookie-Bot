@@ -43,10 +43,10 @@ class Invites(commands.Cog):
 
     @app_commands.checks.cooldown(3, 86400)
     @app_commands.command(name="verify", description="Manually verify a user or manage automatic member verification on member join.")
-    @app_commands.describe(action="Whether to add, remove, or list pre-verified users. Add also manually verifies existing members.", user="User to target. Required for Add and Remove.")
-    async def verify(self, interaction: discord.Interaction, action: Literal["Add", "Remove", "List"] = "Add", user: discord.User = None):
+    @app_commands.describe(action="Whether to add, remove, or list pre-verified users. Add also manually verifies existing members.", user="User to target. Required for add and remove.")
+    async def verify(self, interaction: discord.Interaction, action: Literal["add", "remove", "list"] = "add", user: discord.User = None):
         # Add & remove target a specific user, so one must be provided
-        if action in ("Add", "Remove") and user is None:
+        if action in ("add", "remove") and user is None:
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to {action.lower()} a verification without providing a user.")
             embed = Embeds.error("You must provide a user for this action.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -55,7 +55,7 @@ class Invites(commands.Cog):
         # Prevent Discord timing out
         await interaction.response.defer(ephemeral=True)
 
-        if action == "Add":
+        if action == "add":
             state = await is_quarantined(interaction.guild.id, user.id)
             if state is None:
                 embed = Embeds.error("Couldn't check quarantine status right now. Try again shortly.")
@@ -103,7 +103,7 @@ class Invites(commands.Cog):
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
-        elif action == "Remove":
+        elif action == "remove":
             # Just remove from pre_verified list
             result = await preverify_logic(self.bot, action, interaction.guild.id, user.id, interaction.user.id)
             if not result.get("success"):
