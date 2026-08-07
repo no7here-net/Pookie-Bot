@@ -40,6 +40,9 @@ class Minecraft(commands.Cog):
         # Consecutive fail checks per server, used to debounce
         self.failure_counts = {}
 
+        # Servers that passed validation on the last poll for status loop
+        self.monitored_servers = set()
+
         # Frequent status checker for channel messages
         self.server_monitor.start()
 
@@ -216,6 +219,12 @@ class Minecraft(commands.Cog):
             if not results:
                 return
 
+            # Read per run so a config reload takes effect without a restart
+            offline_threshold = (config.get("minecraft") or {}).get("offline_threshold") or 3
+
+            # Servers missing config are skipped inside check_rcon(), so track what actually got polled
+            self.monitored_servers = set(results)
+
             # Check the result is valid
             for name, reachable in results.items():
                 previous_state = self.server_states.get(name)
@@ -228,7 +237,7 @@ class Minecraft(commands.Cog):
                     self.failure_counts[name] = self.failure_counts.get(name, 0) + 1
 
                     # Too few consecutive failures to call an outage, so hold last known state
-                    if self.failure_counts[name] < (config.get("minecraft") or {}).get("offline_threshold") or 3:
+                    if self.failure_counts[name] < offline_threshold:
                         continue
 
                     current_state = False
@@ -271,11 +280,16 @@ class Minecraft(commands.Cog):
         try:
             server_list = (config.get("minecraft") or {}).get("servers") or {}
 
+            # If there are no servers to check, save resources and stop the routine
+            if not server_list:
+                self.status_channel_monitor.cancel()
+                return
+
             # Reads the debounced states server_monitor already maintains rather than polling
             results = self.server_states
 
-            # Wait until every configured server has a settled state
-            if not server_list or len(results) < len(server_list):
+            # Wait until every polled server has a settled state
+            if not self.monitored_servers or len(results) < len(self.monitored_servers):
                 return
 
             # Get only velocity status
@@ -330,6 +344,13 @@ class Minecraft(commands.Cog):
     @status_channel_monitor.before_loop
     async def before_status_channel_monitor(self):
         await self.bot.wait_until_ready()
+
+        # Hold the first run until server_monitor has settled every polled server, so channel is corrected quickly (if necessary)
+        for i in range(60):
+            if self.monitored_servers and len(self.server_states) >= len(self.monitored_servers):
+                return
+
+            await asyncio.sleep(5)
 
     # Ensure bot & cache is ready first before task starts
     @whitelist_sweeper.before_loop
