@@ -113,7 +113,7 @@ class Invites(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        elif action == "List":
+        elif action == "list":
             # Fetch all entries for this server
             result = await preverify_list(interaction.guild.id)
 
