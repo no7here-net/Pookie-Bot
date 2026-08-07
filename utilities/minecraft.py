@@ -692,15 +692,12 @@ def _sync_send_rcon(host: str, port: int, password: str, command: str, task: boo
 def _sync_check_rcon(host: str, port: int, password: str, command: str = None, timeout: int = 5, task: bool = False) -> bool:
     target = f"{host}:{port}"
     try:
+        # Prevent a somewhat alive server causing the bot to hang by setting a timeout limit
         with ThreadSafeMCRcon(host, password, port=port, timeout=timeout) as mcr:
             # If there is no command, a successful auth is the check
             if command:
-                # Prevent a somewhat alive server causing the bot to hang
-                mcr.socket.settimeout(timeout)
-
                 # Reply is deliberately not parsed, any response proves it is working
                 mcr.command(command)
-
             _rcon_failure_logged.discard(target)
             return True
     except Exception:
