@@ -17,6 +17,8 @@
 # ========================================================================
 
 import discord
+import asyncio
+import time
 
 from typing import Literal
 from discord import app_commands
@@ -274,9 +276,9 @@ class Minecraft(commands.Cog):
         except Exception as e:
             Logger.warning("A critical error occurred whilst running the Minecraft server monitor task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
-    # Continuously monitors Minecraft servers / proxy if populated
-    @tasks.loop(minutes=5)
-    async def status_channel_monitor(self):
+    # Renames the status voice channel from the states server_monitor gathers, on a slower cycle as Discord only allows 2 renames per 10 minutes
+        @tasks.loop(minutes=5)
+        async def status_channel_monitor(self):
         try:
             server_list = (config.get("minecraft") or {}).get("servers") or {}
 
@@ -346,7 +348,9 @@ class Minecraft(commands.Cog):
         await self.bot.wait_until_ready()
 
         # Hold the first run until server_monitor has settled every polled server, so channel is corrected quickly (if necessary)
-        for i in range(60):
+        deadline = time.monotonic() + 300
+
+        while time.monotonic() < deadline:
             if self.monitored_servers and len(self.server_states) >= len(self.monitored_servers):
                 return
 
