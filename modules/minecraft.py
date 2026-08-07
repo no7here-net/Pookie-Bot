@@ -212,7 +212,7 @@ class Minecraft(commands.Cog):
                 previous_state = self.server_states.get(name)
 
                 # If the state changed and it's not the first run
-                if previous_state and previous_state != current_state:
+                if previous_state is not None and previous_state != current_state:
                     # Make names slightly more pretty
                     pretty_name = "Velocity (proxy)" if name == "velocity" else name.capitalize()
 
