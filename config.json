@@ -24,6 +24,7 @@
         "stats": false
     },
     "minecraft": {
+        "offline_threshold": 3,
         "servers": {
             "velocity": {
                 "address": "roubaix.no7here.net",
