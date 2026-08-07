@@ -18,7 +18,6 @@
 
 import discord
 
-from typing import Literal
 from discord import app_commands
 from discord.ext import commands
 
@@ -34,15 +33,17 @@ class Moderation(commands.Cog):
     @app_commands.command(name="echo", description="Echos a message as Pookie Bot.")
     @app_commands.describe(message="What message you want Pookie Bot to send.", channel="Which channel you want Pookie Bot to send it in.", embed="Whether you want Pookie Bot to place it in an embed.")
     @app_commands.rename(enable_embed="embed")
-    async def echo(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel, enable_embed: Literal["true", "false"]):
+    async def echo(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel, enable_embed: bool):
         # Require bot admin / server admin perms to run echo command
         if not (interaction.user.guild_permissions.administrator or is_admin(interaction.user.id)):
             Logger.warning(f"\"{interaction.user.name}\" (ID: {interaction.user.id}) tried to send an echo but was blocked as they do not have permission.")
             embed = Embeds.error("You don't have permission to do that.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
+        # Defer response so Discord gives us more time to respond
+        await interaction.response.defer(ephemeral=True)
         try:
-            if enable_embed == "true":
+            if enable_embed:
                 embed = discord.Embed(description=str(message), color=get_colour("info"))
                 await channel.send(embed=embed)
             else:
