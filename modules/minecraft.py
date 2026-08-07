@@ -277,8 +277,8 @@ class Minecraft(commands.Cog):
             Logger.warning("A critical error occurred whilst running the Minecraft server monitor task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
     # Renames the status voice channel from the states server_monitor gathers, on a slower cycle as Discord only allows 2 renames per 10 minutes
-        @tasks.loop(minutes=5)
-        async def status_channel_monitor(self):
+    @tasks.loop(minutes=5)
+    async def status_channel_monitor(self):
         try:
             server_list = (config.get("minecraft") or {}).get("servers") or {}
 
