@@ -35,7 +35,7 @@ from utilities.helpers import fetch_username
 from utilities.database import is_quarantined, log_action, clear_preverified, clear_verification_state, fetch_pending_by_message
 
 # Add or remove a user from pre-verified list to bypass the gatekeeper on join
-async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove"], guild_id: int, user_id: int, added_by_id: int) -> dict:
+async def preverify_logic(client: discord.Client, action: Literal["add", "remove"], guild_id: int, user_id: int, added_by_id: int) -> dict:
     # Fetch usernames through their ID for logger
     username = await fetch_username(client, user_id)
     added_by_username = await fetch_username(client, added_by_id)
@@ -43,7 +43,7 @@ async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove
     async with db.conn_pool.acquire() as conn:
         async with conn.cursor() as cur:
             try:
-                if action == "Add":
+                if action == "add":
                     await cur.execute("INSERT INTO pre_verified (user_id, guild_id, added_by_id) VALUES (%s, %s, %s)", (user_id, guild_id, added_by_id,))
                 else:
                     # A rowcount of 0 means there was nothing to delete
@@ -55,7 +55,7 @@ async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove
                             "error": "This user is not pre-verified."
                         }
 
-                Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) {"pre-verified" if action == "Add" else "removed pre-verification for"} \"{username}\" (ID: {user_id}).")
+                Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) {"pre-verified" if action == "add" else "removed pre-verification for"} \"{username}\" (ID: {user_id}).")
 
                 return {
                     "success": True,
@@ -70,7 +70,7 @@ async def preverify_logic(client: discord.Client, action: Literal["Add", "Remove
                     "error": "This user is already pre-verified."
                 }
             except Exception as e:
-                Logger.error(f"\"{added_by_username}\" (ID: {added_by_id}) failed to {"pre-verify" if action == "Add" else "remove pre-verification for"} \"{username}\" (ID: {user_id}) due to database failure. Check log.", str(e))
+                Logger.error(f"\"{added_by_username}\" (ID: {added_by_id}) failed to {"pre-verify" if action == "add" else "remove pre-verification for"} \"{username}\" (ID: {user_id}) due to database failure. Check log.", str(e))
 
                 return {
                     "success": False,

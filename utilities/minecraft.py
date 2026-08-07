@@ -126,7 +126,7 @@ async def check_rcon(task: bool = False) -> dict:
     return dict(zip(server_names, results, strict=True))
 
 # Fetches and either links or unlinks a Minecraft and Discord account
-async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove"], user_id: int, mc_username: str) -> dict:
+async def whitelist_logic(client: discord.Client, action: Literal["add", "remove"], user_id: int, mc_username: str) -> dict:
     # Fetch Discord username from ID provided in attributes. Safe to do here as its value is guarded by the functions that trigger this one.
     username = await fetch_username(client, user_id)
 
@@ -166,7 +166,7 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
                 "error": "This Discord account is linked to a banned Minecraft account."
             }
 
-        if action == "Add":
+        if action == "add":
             # Check if the Discord account is already connected to an MC account
             if db_state.get("discord_linked_uuid"):
                 linked_mc_uuid = db_state.get("discord_linked_uuid")
@@ -198,7 +198,7 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
                     "error": "This Minecraft account is already linked to another Discord account."
                 }
 
-        if action == "Remove":
+        if action == "remove":
             # Check if the Discord account isn't connected to an MC account
             if not db_state.get("discord_linked_uuid"):
                 Logger.warning(f"\"{username}\" (ID: {user_id}) was blocked from unwhitelisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is not linked to any Minecraft account.")
@@ -223,14 +223,14 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
                 async with conn.cursor() as cur:
                     await conn.begin()
 
-                    if action == "Add":
+                    if action == "add":
                         await cur.execute("INSERT INTO mc_accounts (user_id, mc_uuid) VALUES (%s, %s)", (user_id, mc_uuid,))
-                    elif action == "Remove":
+                    elif action == "remove":
                         await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s AND mc_uuid = %s", (user_id, mc_uuid,))
 
                     # Queries successful, send RCON command
                     if not await _execute_list_command("whitelist", action, mc_username):
-                        Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist {action.lower()} command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
+                        Logger.warning(f"\"{username}\" (ID: {user_id}) failed to execute whitelist {action} command for the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}).")
                         await conn.rollback()
 
                         return {
@@ -245,7 +245,7 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
                         await conn.rollback()
 
                         # Very rare: RCON succeeded, but DB failed to commit. Attempt reverse RCON.
-                        reverse_action = "Remove" if action == "Add" else "Add"
+                        reverse_action = "remove" if action == "add" else "add"
                         await _execute_list_command("whitelist", reverse_action, mc_username)
 
                         Logger.error(f"\"{username}\" (ID: {user_id}) passed whitelist logic and RCON command succeeded, but the database failed to commit. A rollback RCON command was sent.")
@@ -267,7 +267,7 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
     mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
 
     # Return success for either add or remove
-    Logger.info(f"\"{username}\" (ID: {user_id}) successfully {"whitelisted" if action == "Add" else "unlinked"} \"{mc_username}\" (UUID: {mc_uuid}).")
+    Logger.info(f"\"{username}\" (ID: {user_id}) successfully {"whitelisted" if action == "add" else "unlinked"} \"{mc_username}\" (UUID: {mc_uuid}).")
 
     return {
         "success": True,
@@ -276,7 +276,7 @@ async def whitelist_logic(client: discord.Client, action: Literal["Add", "Remove
     }
 
 # Fetch and ban Minecraft (and Discord if linked) account
-async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove"], guild_id: int, added_by_id: int, mc_username: str, reason: str) -> dict:
+async def blacklist_logic(client: discord.Client, action: Literal["add", "remove"], guild_id: int, added_by_id: int, mc_username: str, reason: str) -> dict:
     # Fetch Discord username from ID provided in attributes. Safe to do here as its value is guarded by the functions that trigger this one.
     added_by_username = await fetch_username(client, added_by_id)
 
@@ -307,7 +307,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                 "error": "Failed to connect to database to perform checks."
             }
 
-        if db_state.get("mc_ban_reason") and action == "Add":
+        if db_state.get("mc_ban_reason") and action == "add":
             Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from blacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is already blacklisted (Reason: {db_state.get("mc_ban_reason")}).")
 
             return {
@@ -316,7 +316,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
             }
 
         if db_state.get("mc_linked_user_id"):
-            if action == "Remove":
+            if action == "remove":
                 Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from unblacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is already whitelisted.")
 
                 return {
@@ -329,7 +329,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                 # Remove from the whitelist via RCON after the blacklist succeeds
                 removed_from_whitelist = True
 
-        if not db_state.get("mc_ban_reason") and action == "Remove":
+        if not db_state.get("mc_ban_reason") and action == "remove":
             Logger.warning(f"\"{added_by_username}\" (ID: {added_by_id}) was blocked from unblacklisting the Minecraft account \"{mc_username}\" (UUID: {mc_uuid}) as it is not currently blacklisted.")
 
             return {
@@ -342,7 +342,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                 async with conn.cursor() as cur:
                     await conn.begin()
 
-                    if action == "Add":
+                    if action == "add":
                         if user_id:
                             # Delete existing connected account from database
                             await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s AND mc_uuid = %s", (user_id, mc_uuid,))
@@ -358,7 +358,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                             # Add MC account to ban database but leave Discord ID blank
                             await cur.execute("INSERT INTO mc_bans (mc_uuid, added_by_id, reason) VALUES (%s, %s, %s)", (mc_uuid, added_by_id, reason,))
 
-                    elif action == "Remove":
+                    elif action == "remove":
                         user_id = db_state.get("mc_ban_user_id")
                         existing_added_by_id = db_state.get("mc_ban_added_by_id")
 
@@ -388,7 +388,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                         await conn.rollback()
 
                         # Very rare: RCON succeeded, but DB failed to commit. Attempt reverse RCON.
-                        reverse_action = "Remove" if action == "Add" else "Add"
+                        reverse_action = "remove" if action == "add" else "add"
                         await _execute_list_command("blacklist", reverse_action, mc_username)
 
                         Logger.error(f"\"{added_by_username}\" (ID: {added_by_id}) passed blacklist logic and RCON command succeeded, but the database failed to commit. A rollback RCON command was sent.")
@@ -398,8 +398,8 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
                         }
 
                     # After successful commit, optionally run whitelist cleanup if needed
-                    if action == "Add" and removed_from_whitelist:
-                        if not await _execute_list_command("whitelist", "Remove", mc_username, allow_missing=True):
+                    if action == "add" and removed_from_whitelist:
+                        if not await _execute_list_command("whitelist", "remove", mc_username, allow_missing=True):
                             Logger.info(f"\"{mc_username}\" (UUID: {mc_uuid}) was successfully blacklisted, but the subsequent optional whitelist removal failed. This is not fatal as the blacklist takes priority.")
 
         except Exception as e:
@@ -414,7 +414,7 @@ async def blacklist_logic(client: discord.Client, action: Literal["Add", "Remove
     # Fetch MC avatar from skin
     mc_avatar = await _fetch_mc_avatar(mc_username, mc_uuid)
 
-    Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) successfully {"un" if action == "Remove" else ""}blacklisted \"{mc_username}\" (UUID: {mc_uuid}){f" and its associated Discord account \"{username}\" (ID: {user_id})" if user_id else ""}.")
+    Logger.info(f"\"{added_by_username}\" (ID: {added_by_id}) successfully {"un" if action == "remove" else ""}blacklisted \"{mc_username}\" (UUID: {mc_uuid}){f" and its associated Discord account \"{username}\" (ID: {user_id})" if user_id else ""}.")
 
     # Return info
     return {
@@ -465,7 +465,7 @@ async def unwhitelist_user(client: discord.Client, user_id: int, context: str, t
                     await cur.execute("DELETE FROM mc_accounts WHERE user_id = %s", (user_id,))
 
                     # allow_missing tolerates the account already being gone server-side, as the goal state is "not whitelisted"
-                    if not await _execute_list_command("whitelist", "Remove", target, allow_missing=True):
+                    if not await _execute_list_command("whitelist", "remove", target, allow_missing=True):
                         Logger.warning(f"\"{username}\" (ID: {user_id}) could not have their Minecraft account \"{mc_username or "unknown"}\" (UUID: {mc_uuid}) removed from the whitelist ({context}). Manual correction required.", task=task)
                         await conn.rollback()
                         return False
@@ -474,7 +474,7 @@ async def unwhitelist_user(client: discord.Client, user_id: int, context: str, t
                         await conn.commit()
                     except Exception:
                         await conn.rollback()
-                        await _execute_list_command("whitelist", "Add", target)
+                        await _execute_list_command("whitelist", "add", target)
                         Logger.error(f"\"{username}\" (ID: {user_id}) was removed from the whitelist ({context}), but the database failed to commit. A rollback RCON command was sent.", task=task)
                         return False
 
@@ -490,11 +490,11 @@ async def unwhitelist_user(client: discord.Client, user_id: int, context: str, t
 # ================
 
 # Sends whitelist / blacklist command to Velocity and validates the response.
-async def _execute_list_command(list_name: Literal["whitelist", "blacklist"], action: Literal["Add", "Remove"], mc_username: str, allow_missing: bool = False) -> bool:
+async def _execute_list_command(list_name: Literal["whitelist", "blacklist"], action: Literal["add", "remove"], mc_username: str, allow_missing: bool = False) -> bool:
     response = await _send_velocity_command(f"{list_name} {action.lower()} {mc_username}")
     response = response.lower()
 
-    if action == "Add":
+    if action == "add":
         return "added player" in response
 
     if "removed player" in response:
