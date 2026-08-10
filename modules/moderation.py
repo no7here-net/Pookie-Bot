@@ -40,8 +40,13 @@ class Moderation(commands.Cog):
             embed = Embeds.error("You don't have permission to do that.")
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
+
         # Defer response so Discord gives us more time to respond
         await interaction.response.defer(ephemeral=True)
+
+        # Allow new lines to be inserted via \n in a message field
+        message = message.replace("\\n", "\n")
+
         try:
             if enable_embed:
                 embed = discord.Embed(description=message, color=get_colour("info"))
