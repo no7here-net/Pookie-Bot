@@ -31,7 +31,7 @@ class Moderation(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="echo", description="Echoes a message as Pookie Bot.")
-    @app_commands.describe(message="What message you want Pookie Bot to send.", channel="Which channel you want Pookie Bot to send it in.", embed="Whether you want Pookie Bot to place it in an embed.")
+    @app_commands.describe(message="What message you want Pookie Bot to send.", channel="Which channel you want Pookie Bot to send it in.", enable_embed="Whether you want Pookie Bot to place it in an embed.")
     @app_commands.rename(enable_embed="embed")
     async def echo(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel, enable_embed: bool = True):
         # Require bot admin / server admin perms to run echo command
