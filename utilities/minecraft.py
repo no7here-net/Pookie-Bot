@@ -47,6 +47,9 @@ _http_session = None
 # List of hosts that have already been detected as having issues
 _rcon_failure_logged = set()
 
+# List of servers already warned about for bad config, cleared when their config validates again
+_rcon_config_logged = set()
+
 # MCRcon variant that is safe to use off the main thread
 class ThreadSafeMCRcon(MCRcon):
     def __init__(self, host: str, password: str, port: int = 25575, tlsmode: int = 0, timeout: int = 5):
@@ -97,24 +100,36 @@ async def check_rcon(task: bool = False) -> dict:
         # Fetch non-sensitive key name
         env_key = info.get("rcon_password")
 
+        # Collect any problem so it can be logged once rather than on every poll
+        config_error = None
+
         # If the config is missing the key, or the environment is missing the password
         if not env_key or not os.environ.get(env_key):
-            Logger.warning(f"Failed to fetch RCON password for \"{name}\" from config.json / environment variables.", task=task)
+            config_error = f"Failed to fetch RCON password for \"{name}\" from config.json / environment variables."
+        else:
+            # Check config data is not missing
+            missing_keys = []
+
+            if not info.get("address"):
+                missing_keys.append("address")
+
+            if not info.get("rcon_port"):
+                missing_keys.append("rcon_port")
+
+            if missing_keys:
+                # Joins the list with " and ", so it handles 1 or 2 items perfectly
+                config_error = f"Failed to fetch \"{"\" and \"".join(missing_keys)}\" for \"{name}\" from config.json."
+
+        if config_error:
+            # Only log the first time, as a broken config persists until somebody fixes it
+            if name not in _rcon_config_logged:
+                _rcon_config_logged.add(name)
+                Logger.warning(config_error, task=task)
+
             continue
 
-        # Check config data is not missing
-        missing_keys = []
-
-        if not info.get("address"):
-            missing_keys.append("address")
-
-        if not info.get("rcon_port"):
-            missing_keys.append("rcon_port")
-
-        if missing_keys:
-            # Joins the list with " and ", so it handles 1 or 2 items perfectly
-            Logger.warning(f"Failed to fetch \"{"\" and \"".join(missing_keys)}\" for \"{name}\" from config.json.", task=task)
-            continue
+        # Config validates again, so a future problem is worth logging
+        _rcon_config_logged.discard(name)
 
         # Append server name if checks pass
         server_names.append(name)

@@ -38,6 +38,26 @@ def load_config():
 
 config = load_config()
 
+# Checks the numeric values that reach a comparison or a socket timeout at runtime, so a typo is rejected here rather than taking down a task on the next poll
+def _validate_numeric(new_config: dict) -> str | None:
+    minecraft = new_config.get("minecraft") or {}
+
+    # Every value is optional, as each consumer carries its own default
+    checks = [("offline_threshold", minecraft.get("offline_threshold"))]
+
+    for name, server in (minecraft.get("servers") or {}).items():
+        checks.append((f"{name}.health_timeout", (server or {}).get("health_timeout")))
+
+    for key, value in checks:
+        if value is None:
+            continue
+
+        # bool is a subclass of int, so it has to be excluded explicitly
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            return f"\"{key}\" must be a whole number of at least 1, but was {value!r}"
+
+    return None
+
 # Add a function to reload config
 def reload_config():
     try:
@@ -47,6 +67,13 @@ def reload_config():
         # Check if the new config is empty (e.g., if the file was totally blank)
         if not new_config:
             Logger.warning("Config reload aborted: config.json is empty.")
+            return False
+
+        # Reject bad numeric values, keeping the previous config rather than letting a typo reach a comparison or a socket timeout
+        error = _validate_numeric(new_config)
+
+        if error:
+            Logger.warning(f"Config reload aborted: {error}.")
             return False
 
         # Update config after passing check
