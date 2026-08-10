@@ -44,6 +44,12 @@ _mc_state_lock = asyncio.Lock()
 # Shared HTTP session for all Mojang API / avatar lookups
 _http_session = None
 
+# List of hosts that have already been detected as having issues
+_rcon_failure_logged = set()
+
+# List of servers already warned about for bad config, cleared when their config validates again
+_rcon_config_logged = set()
+
 # MCRcon variant that is safe to use off the main thread
 class ThreadSafeMCRcon(MCRcon):
     def __init__(self, host: str, password: str, port: int = 25575, tlsmode: int = 0, timeout: int = 5):
@@ -94,30 +100,42 @@ async def check_rcon(task: bool = False) -> dict:
         # Fetch non-sensitive key name
         env_key = info.get("rcon_password")
 
+        # Collect any problem so it can be logged once rather than on every poll
+        config_error = None
+
         # If the config is missing the key, or the environment is missing the password
         if not env_key or not os.environ.get(env_key):
-            Logger.warning(f"Failed to fetch RCON password for \"{name}\" from config.json / environment variables.", task=task)
+            config_error = f"Failed to fetch RCON password for \"{name}\" from config.json / environment variables."
+        else:
+            # Check config data is not missing
+            missing_keys = []
+
+            if not info.get("address"):
+                missing_keys.append("address")
+
+            if not info.get("rcon_port"):
+                missing_keys.append("rcon_port")
+
+            if missing_keys:
+                # Joins the list with " and ", so it handles 1 or 2 items perfectly
+                config_error = f"Failed to fetch \"{"\" and \"".join(missing_keys)}\" for \"{name}\" from config.json."
+
+        if config_error:
+            # Only log the first time, as a broken config persists until somebody fixes it
+            if name not in _rcon_config_logged:
+                _rcon_config_logged.add(name)
+                Logger.warning(config_error, task=task)
+
             continue
 
-        # Check config data is not missing
-        missing_keys = []
-
-        if not info.get("address"):
-            missing_keys.append("address")
-
-        if not info.get("rcon_port"):
-            missing_keys.append("rcon_port")
-
-        if missing_keys:
-            # Joins the list with " and ", so it handles 1 or 2 items perfectly
-            Logger.warning(f"Failed to fetch \"{"\" and \"".join(missing_keys)}\" for \"{name}\" from config.json.", task=task)
-            continue
+        # Config validates again, so a future problem is worth logging
+        _rcon_config_logged.discard(name)
 
         # Append server name if checks pass
         server_names.append(name)
 
         # Queue a background task using internal rcon function
-        rcon_tasks.append(asyncio.to_thread(_sync_check_rcon, info.get("address"), info.get("rcon_port"), os.environ.get(env_key), task=task))
+        rcon_tasks.append(asyncio.to_thread(_sync_check_rcon, info.get("address"), info.get("rcon_port"), os.environ.get(env_key), command=info.get("health_command"), timeout=info.get("health_timeout", 5), task=task))
 
     # Run RCON connections simultaneously
     results = await asyncio.gather(*rcon_tasks)
@@ -686,10 +704,22 @@ def _sync_send_rcon(host: str, port: int, password: str, command: str, task: boo
         return "ERROR"
 
 # Internal RCON helper function
-def _sync_check_rcon(host: str, port: int, password: str, task: bool = False) -> bool:
+def _sync_check_rcon(host: str, port: int, password: str, command: str = None, timeout: int = 5, task: bool = False) -> bool:
+    target = f"{host}:{port}"
     try:
-        with ThreadSafeMCRcon(host, password, port=port):
+        # Prevent a somewhat alive server causing the bot to hang by setting a timeout limit
+        with ThreadSafeMCRcon(host, password, port=port, timeout=timeout) as mcr:
+            # If there is no command, a successful auth is the check
+            if command:
+                # Reply is deliberately not parsed, any response proves it is working
+                mcr.command(command)
+            _rcon_failure_logged.discard(target)
             return True
     except Exception:
-        Logger.warning(f"RCON check failed for \"{host}:{port}\".", task=task)
+        if target not in _rcon_failure_logged:
+            # Add server to list of failed servers
+            _rcon_failure_logged.add(target)
+
+            # Send a warning to the log file / terminal
+            Logger.warning(f"RCON check failed for \"{target}\".", task=task)
         return False

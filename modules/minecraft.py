@@ -17,6 +17,8 @@
 # ========================================================================
 
 import discord
+import asyncio
+import time
 
 from typing import Literal
 from discord import app_commands
@@ -36,13 +38,25 @@ class Minecraft(commands.Cog):
         # Starts server_monitor when cog starts
         self.vc_status = None
         self.server_states = {}
+
+        # Consecutive fail checks per server, used to debounce
+        self.failure_counts = {}
+
+        # Servers that passed validation on the last poll for status loop
+        self.monitored_servers = set()
+
+        # Frequent status checker for channel messages
         self.server_monitor.start()
+
+        # Start status channel updater, runs on slower cycle for Discord rate limit
+        self.status_channel_monitor.start()
 
         # Start whitelist reconciliation sweeper when cog starts
         self.whitelist_sweeper.start()
 
     def cog_unload(self):
         self.server_monitor.cancel()
+        self.status_channel_monitor.cancel()
         self.whitelist_sweeper.cancel()
 
     @app_commands.command(name="whitelist", description="Add or remove an account from the Minecraft server whitelist.")
@@ -191,7 +205,7 @@ class Minecraft(commands.Cog):
             Logger.warning("A critical error occurred whilst running the whitelist sweeper task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
     # Continuously monitors Minecraft servers / proxy if populated
-    @tasks.loop(minutes=5)
+    @tasks.loop(seconds=30)
     async def server_monitor(self):
         try:
             server_list = (config.get("minecraft") or {}).get("servers") or {}
@@ -203,13 +217,32 @@ class Minecraft(commands.Cog):
 
             results = await check_rcon(task=True)
 
-            # Empty result means every configured server failed validation inside check_rcon()
+            # Empty results means every configured server failed validation inside check_rcon()
             if not results:
                 return
 
-            # Check that the result is valid
-            for name, current_state in results.items():
+            # Read per run so a config reload takes effect without a restart
+            offline_threshold = (config.get("minecraft") or {}).get("offline_threshold") or 3
+
+            # Servers missing config are skipped inside check_rcon(), so track what actually got polled
+            self.monitored_servers = set(results)
+
+            # Check the result is valid
+            for name, reachable in results.items():
                 previous_state = self.server_states.get(name)
+
+                if reachable:
+                    # Any success resets a run of failures
+                    self.failure_counts[name] = 0
+                    current_state = True
+                else:
+                    self.failure_counts[name] = self.failure_counts.get(name, 0) + 1
+
+                    # Too few consecutive failures to call an outage, so hold last known state
+                    if self.failure_counts[name] < offline_threshold:
+                        continue
+
+                    current_state = False
 
                 # If the state changed and it's not the first run
                 if previous_state is not None and previous_state != current_state:
@@ -240,6 +273,26 @@ class Minecraft(commands.Cog):
 
                 # Update the memory state for the next check
                 self.server_states[name] = current_state
+        except Exception as e:
+            Logger.warning("A critical error occurred whilst running the Minecraft server monitor task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
+
+    # Renames the status voice channel from the states server_monitor gathers, on a slower cycle as Discord only allows 2 renames per 10 minutes
+    @tasks.loop(minutes=5)
+    async def status_channel_monitor(self):
+        try:
+            server_list = (config.get("minecraft") or {}).get("servers") or {}
+
+            # If there are no servers to check, save resources and stop the routine
+            if not server_list:
+                self.status_channel_monitor.cancel()
+                return
+
+            # Reads the debounced states server_monitor already maintains rather than polling, ignoring any server that has since been removed from the config
+            results = {name: state for name, state in self.server_states.items() if name in self.monitored_servers}
+
+            # Wait until every polled server has a settled state
+            if not self.monitored_servers or len(results) < len(self.monitored_servers):
+                return
 
             # Get only velocity status
             velocity_status = results.get("velocity", False)
@@ -282,12 +335,26 @@ class Minecraft(commands.Cog):
                 # Save the new status to memory
                 self.vc_status = new_status
         except Exception as e:
-            Logger.warning("A critical error occurred whilst running the Minecraft server monitor task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
+            Logger.warning("A critical error occurred whilst running the Minecraft status channel task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
     # Ensure bot & cache is ready first before task starts
     @server_monitor.before_loop
     async def before_server_monitor(self):
         await self.bot.wait_until_ready()
+
+    # Ensure bot & cache is ready first before task starts
+    @status_channel_monitor.before_loop
+    async def before_status_channel_monitor(self):
+        await self.bot.wait_until_ready()
+
+        # Hold the first run until server_monitor has settled every polled server, so channel is corrected quickly (if necessary)
+        deadline = time.monotonic() + 300
+
+        while time.monotonic() < deadline:
+            if self.monitored_servers and len(self.server_states) >= len(self.monitored_servers):
+                return
+
+            await asyncio.sleep(5)
 
     # Ensure bot & cache is ready first before task starts
     @whitelist_sweeper.before_loop
