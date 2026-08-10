@@ -287,8 +287,8 @@ class Minecraft(commands.Cog):
                 self.status_channel_monitor.cancel()
                 return
 
-            # Reads the debounced states server_monitor already maintains rather than polling
-            results = self.server_states
+            # Reads the debounced states server_monitor already maintains rather than polling, ignoring any server that has since been removed from the config
+            results = {name: state for name, state in self.server_states.items() if name in self.monitored_servers}
 
             # Wait until every polled server has a settled state
             if not self.monitored_servers or len(results) < len(self.monitored_servers):
