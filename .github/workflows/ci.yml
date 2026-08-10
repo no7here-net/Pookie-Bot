@@ -28,8 +28,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -r requirements.txt
-      - run: python -c "import index"
-
+      - run: python -c "import index, importlib, pkgutil; [importlib.import_module('modules.' + m.name) for m in pkgutil.iter_modules(['modules'])]"
   # test:
   #   runs-on: ubuntu-latest
   #   services:
