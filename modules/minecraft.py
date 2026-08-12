@@ -36,8 +36,10 @@ class Minecraft(commands.Cog):
         self.bot = bot
 
         # Starts server_monitor when cog starts
-        self.vc_status = None
         self.server_states = {}
+
+        # Timestamps of recent renames per channel, used to stay inside Discord's rename limit
+        self.rename_history = {}
 
         # Consecutive fail checks per server, used to debounce
         self.failure_counts = {}
@@ -276,8 +278,8 @@ class Minecraft(commands.Cog):
         except Exception as e:
             Logger.warning("A critical error occurred whilst running the Minecraft server monitor task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
-    # Renames the status voice channel from the states server_monitor gathers, on a slower cycle as Discord only allows 2 renames per 10 minutes
-    @tasks.loop(minutes=5)
+    # Renames the status voice channel from the states server_monitor gathers, checking as often as the poller but rate limiting the renames themselves
+    @tasks.loop(seconds=30)
     async def status_channel_monitor(self):
         try:
             server_list = (config.get("minecraft") or {}).get("servers") or {}
@@ -316,24 +318,31 @@ class Minecraft(commands.Cog):
             else:
                 new_status = "🟢・Online"
 
-            # Change VC name if it does NOT match
-            if new_status != self.vc_status:
-                for server_cfg in (config.get("servers") or []):
-                    channel_id = (server_cfg.get("channels") or {}).get("mc_status")
+            # Rename any status channel that doesn't match. channel.name comes from gateway cache, so stays correct if renamed by something else
+            for server_cfg in (config.get("servers") or []):
+                channel_id = (server_cfg.get("channels") or {}).get("mc_status")
 
-                    if channel_id:
-                        channel = self.bot.get_channel(channel_id)
+                if not channel_id:
+                    continue
 
-                        if channel:
-                            try:
-                                # Only rename is the status changes to avoid API spam
-                                if channel.name != new_status:
-                                    await channel.edit(name=new_status)
-                            except Exception:
-                                Logger.warning(f"Minecraft server VC status update failed for channel (ID: {channel_id}).", task=True)
+                channel = self.bot.get_channel(channel_id)
 
-                # Save the new status to memory
-                self.vc_status = new_status
+                # Nothing to do if the channel is missing or already reads correctly
+                if not channel or channel.name == new_status:
+                    continue
+
+                # Discord permits two renames every ten minutes per channel, so drop if the budget is already spent
+                now = time.monotonic()
+                history = [stamp for stamp in self.rename_history.get(channel_id, []) if now - stamp < 600]
+
+                if len(history) < 2:
+                    try:
+                        await channel.edit(name=new_status)
+                        history.append(now)
+                    except Exception:
+                        Logger.warning(f"Minecraft server VC status update failed for channel (ID: {channel_id}).", task=True)
+
+                self.rename_history[channel_id] = history
         except Exception as e:
             Logger.warning("A critical error occurred whilst running the Minecraft status channel task, but was caught by the global task exception capture to prevent the task stopping.", str(e), task=True)
 
